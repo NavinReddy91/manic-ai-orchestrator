@@ -43,9 +43,39 @@ Every request is scoped to one **Organization** (a hard boundary) — no agent, 
 - **Migrations:** Alembic
 - **Deploy:** Docker Compose or systemd
 
+## Features
+
+### Core Features
+- **Hierarchical agent system** — CEO → 6 department heads → 10 leaf workers
+- **Real git operations** — clone, branch, write files, commit, push, open PR
+- **Live web access** — DuckDuckGo search + page fetch for all leaf agents
+- **Organization boundary enforcement** — hard isolation between businesses
+- **Multi-provider LLM** — switch between Groq, Gemini, OpenAI, Anthropic, or OpenRouter
+
+### Production Hardening
+- **Task cancellation** — cancel running tasks via `DELETE /tasks/{id}`
+- **Task timeouts** — auto-fail tasks stuck in "running" for too long (configurable)
+- **Webhook callbacks** — POST task results to a URL when tasks complete
+- **Rate limiting** — per-user limits on task creation (per-minute and per-hour)
+- **Error recovery** — background job detects and fails stale tasks
+- **Admin/debug endpoints** — view all tasks, stats, audit logs without JWT
+- **Audit logging** — track who created/cancelled tasks, when, from which IP
+- **Task templates** — save and reuse common prompts
+- **Agent customization** — per-organization overrides for agent system prompts
+- **File size limits** — prevent coding agents from writing huge files
+- **Branch naming conflicts** — unique branch names for concurrent tasks
+- **Task prioritization** — normal, high, or urgent priority levels
+- **Cost tracking** — track LLM call count and estimated token usage per task
+- **Race condition fix** — atomic DB guard prevents double-triggering of manager review
+- **Redis-backed OAuth state** — works across multiple API workers
+- **Path traversal protection** — rejects file paths outside repo directory
+- **Celery retries** — automatic retry with backoff on transient failures
+- **Structured JSON logging** — all modules emit JSON-formatted logs
+- **Connection pooling** — SQLAlchemy configured for production
+
 ## LLM Providers
 
-The system supports multiple LLM backends. Set `LLM_PROVIDER` in `.env`:
+Set `LLM_PROVIDER` in `.env`:
 
 | Provider | `LLM_PROVIDER` | Example `LLM_MODEL` | Notes |
 |---|---|---|---|
@@ -67,13 +97,6 @@ The system supports multiple LLM backends. Set `LLM_PROVIDER` in `.env`:
 - **Manic Operations** — Ops Coordinator (deadlines, vendor status, rollups).
 
 The Chief Agent only delegates to the teams a given request actually needs.
-
-## Organization Boundary
-
-- `Organization` is its own table. Every `Task` has a required `organization_id`.
-- `ConnectedAccount` (GitHub tokens) are keyed on `(user_id, organization_id, provider)` — never on `user_id` alone.
-- `get_github_token()` is the *only* function that reads a token, and it always requires both IDs to match.
-- Live web browsing is intentionally NOT organization-scoped (it only reads the public internet).
 
 ## Deployment Guide
 
@@ -103,7 +126,7 @@ See `deploy/systemd-units.txt` for two long-running services.
 | **Render (paid)** | ~$25-40/mo | Managed hosting, but pricey for Celery |
 | **Render (free)** | $0 | **Not viable** — no persistent Redis/Postgres, workers spin down |
 
-**Recommendation:** Deploy on the same VPS as DigiMarkIn (if resources allow) or get a cheap VPS with 2GB+ RAM. Free tiers won't work reliably for a Celery-based system.
+**Recommendation:** Deploy on the same VPS as DigiMarkIn (if resources allow) or get a cheap VPS with 2GB+ RAM.
 
 ### Integrating with DigiMarkIn (Laravel)
 
@@ -119,6 +142,11 @@ See `deploy/systemd-units.txt` for two long-running services.
 - Orchestrator processes in background, returns task ID
 - Laravel polls `GET /tasks/{id}` to show progress
 - When done, Laravel displays the final report
+
+**Or use webhooks:**
+- Pass `callback_url` when creating a task
+- Orchestrator POSTs the result to that URL when the task completes
+- No polling needed
 
 **CORS:** Update `app/main.py` to allow your DigiMarkIn domain:
 ```python
@@ -144,6 +172,59 @@ See `.env.example` for all required variables:
 | `REDIS_URL` | Redis connection string |
 | `TOKEN_ENCRYPTION_KEY` | Fernet key for encrypting stored tokens |
 | `MAX_LLM_CALLS_PER_TASK` | Cost control: max LLM calls per task (0 = unlimited) |
+| `RATE_LIMIT_TASKS_PER_MINUTE` | Max tasks per user per minute |
+| `RATE_LIMIT_TASKS_PER_HOUR` | Max tasks per user per hour |
+| `TASK_TIMEOUT_MINUTES` | Auto-fail tasks stuck in "running" for this long |
+| `ADMIN_SECRET` | Bearer token for /admin endpoints |
+| `ADMIN_ALLOWED_IPS` | Comma-separated IPs allowed to access /admin |
+| `MAX_FILE_SIZE_BYTES` | Max file size for coding agents (default 1MB) |
+| `MAX_FILES_PER_COMMIT` | Max files in a single commit (default 50) |
+
+## API Endpoints
+
+### Tasks
+| Method | Path | Description |
+|---|---|---|
+| POST | `/tasks` | Create task (with optional `callback_url`, `priority`) |
+| GET | `/tasks/{id}` | Get task with full agent execution tree |
+| GET | `/tasks` | List tasks (optional `?organization_id=` and `?status=` filters) |
+| DELETE | `/tasks/{id}` | Cancel a running task |
+
+### Organizations
+| Method | Path | Description |
+|---|---|---|
+| POST | `/organizations` | Create organization |
+| GET | `/organizations` | List organizations for authenticated user |
+
+### Task Templates
+| Method | Path | Description |
+|---|---|---|
+| POST | `/task-templates` | Create a task template |
+| GET | `/task-templates` | List templates (optional `?organization_id=` filter) |
+| GET | `/task-templates/{id}` | Get a specific template |
+| PUT | `/task-templates/{id}` | Update a template |
+| DELETE | `/task-templates/{id}` | Delete a template |
+
+### GitHub Integration
+| Method | Path | Description |
+|---|---|---|
+| GET | `/integrations/github/connect` | Start GitHub OAuth flow |
+| GET | `/integrations/github/callback` | OAuth callback |
+
+### Admin (requires `ADMIN_SECRET` or IP whitelist)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/admin/tasks` | List all tasks across all organizations |
+| GET | `/admin/tasks/stale` | List tasks stuck in "running" for too long |
+| GET | `/admin/stats` | System-wide statistics |
+| GET | `/admin/audit` | Audit logs with filters |
+
+### Health
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health` | Health check |
+
+All endpoints except `/health` and `/admin/*` require a valid DigiMarkIn JWT in the `Authorization: Bearer` header.
 
 ## Database Migrations
 
@@ -155,35 +236,6 @@ alembic upgrade head
 alembic revision --autogenerate -m "description"
 alembic upgrade head
 ```
-
-## Production Hardening Applied
-
-- **Race condition fix:** Atomic DB guard (`_try_acquire_review`) prevents double-triggering of manager review when sibling tasks finish simultaneously.
-- **Redis-backed OAuth state:** OAuth pending states stored in Redis with 10-minute TTL — works across multiple API workers and survives restarts.
-- **Path traversal protection:** `write_files()` rejects any file path that resolves outside the repo directory.
-- **Celery retries:** `run_agent_node` retries up to 3 times with backoff on transient failures.
-- **Structured JSON logging:** All modules emit JSON-formatted logs with task/agent context.
-- **Connection pooling:** SQLAlchemy engine configured with `pool_pre_ping`, `pool_size=10`, `max_overflow=20`.
-- **Alembic migrations:** Schema evolution handled via Alembic instead of `create_all()`.
-- **Cost control:** `MAX_LLM_CALLS_PER_TASK` setting to cap LLM API calls per task.
-- **Multi-provider LLM:** Switch between Groq, Gemini, OpenAI, Anthropic, or OpenRouter via environment config.
-- **Proper HTTP status codes:** `GET /tasks/{id}` returns 404 (not 200) when not found.
-- **Modern FastAPI patterns:** Uses `lifespan` context manager instead of deprecated `@app.on_event`.
-
-## API Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Health check |
-| POST | `/organizations` | Create organization |
-| GET | `/organizations` | List organizations for authenticated user |
-| POST | `/tasks` | Create task (triggers agent tree) |
-| GET | `/tasks/{id}` | Get task with full agent execution tree |
-| GET | `/tasks` | List tasks (optional `?organization_id=` filter) |
-| GET | `/integrations/github/connect` | Start GitHub OAuth flow |
-| GET | `/integrations/github/callback` | OAuth callback |
-
-All endpoints except `/health` require a valid DigiMarkIn JWT in the `Authorization: Bearer` header.
 
 ## Testing Locally
 
@@ -203,3 +255,5 @@ All endpoints except `/health` require a valid DigiMarkIn JWT in the `Authorizat
 - [ ] Test with a coding task against a throwaway test repo
 - [ ] Verify organization boundary isolation
 - [ ] Switch to production LLM provider (Gemini or GPT-4o)
+- [ ] Configure webhooks for real-time task completion notifications
+- [ ] Set up admin endpoints for monitoring and debugging

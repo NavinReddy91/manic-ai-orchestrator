@@ -6,6 +6,8 @@ from .db import init_db
 from .github_oauth import router as github_router
 from .tasks_api import router as tasks_router
 from .organizations_api import router as organizations_router
+from .admin_api import router as admin_router
+from .task_templates_api import router as templates_router
 from .logging_config import setup_logging
 
 
@@ -16,7 +18,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manic AI Orchestrator", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="Manic AI Orchestrator", version="0.4.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +31,8 @@ app.add_middleware(
 app.include_router(github_router)
 app.include_router(tasks_router)
 app.include_router(organizations_router)
+app.include_router(admin_router)
+app.include_router(templates_router)
 
 
 @app.get("/health")

@@ -1,14 +1,21 @@
+"""
+Celery worker — the execution engine for the hierarchical agent system.
+Handles task cancellation, timeouts, webhooks, agent overrides, file size limits,
+branch naming, and cost tracking.
+"""
+
 import asyncio
 import json
 import logging
 import shutil
 import tempfile
+from datetime import datetime
 from celery import Celery
 from sqlalchemy.orm import Session
 
 from .config import settings
 from .db import SessionLocal
-from .models import AgentRun, Task
+from .models import AgentRun, Task, OrgAgentOverride
 from .org_chart import ORG_CHART
 from .llm import delegate, review, run_worker
 from .git_ops import (
@@ -19,6 +26,7 @@ from .git_ops import (
     open_pull_request,
 )
 from .github_oauth import get_github_token
+from .webhook import send_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +38,14 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     task_track_started=True,
 )
+
+# Enable Celery Beat for periodic tasks
+celery_app.conf.beat_schedule = {
+    "cleanup-stale-tasks": {
+        "task": "cleanup_stale_tasks",
+        "schedule": 60.0,  # run every 60 seconds
+    },
+}
 
 MAX_REVISIONS_PER_AGENT = 2
 
@@ -54,9 +70,7 @@ def _compile_context(children: list[AgentRun]) -> str:
 def _try_acquire_review(db: Session, parent_id: str) -> bool:
     """
     Atomic guard: attempt to transition the parent from 'awaiting_children' to
-    'reviewing'. Returns True only if THIS caller won the race. Prevents two
-    Celery workers from both triggering the manager's review step when sibling
-    tasks finish at nearly the same moment.
+    'reviewing'. Returns True only if THIS caller won the race.
     """
     from sqlalchemy import update
 
@@ -67,6 +81,58 @@ def _try_acquire_review(db: Session, parent_id: str) -> bool:
     )
     db.commit()
     return result.rowcount > 0
+
+
+def _is_task_cancelled(db: Session, task_id: str) -> bool:
+    """Check if the task has been cancelled."""
+    task = db.query(Task).filter_by(id=task_id).first()
+    return task and task.status == "cancelled"
+
+
+def _get_agent_system_prompt(db: Session, agent_key: str, organization_id: str) -> str:
+    """
+    Get the system prompt for an agent, checking for org-specific overrides first.
+    """
+    override = (
+        db.query(OrgAgentOverride)
+        .filter_by(agent_key=agent_key, organization_id=organization_id)
+        .first()
+    )
+    if override:
+        return override.system_prompt_override
+    return ORG_CHART[agent_key]["system"]
+
+
+def _generate_unique_branch_name(task_id: str, existing_branches: list[str]) -> str:
+    """
+    Generate a unique branch name to avoid conflicts with concurrent tasks.
+    """
+    base = f"nexus/{task_id[:8]}"
+    if base not in existing_branches:
+        return base
+
+    # Add a suffix to make it unique
+    counter = 1
+    while f"{base}-{counter}" in existing_branches:
+        counter += 1
+    return f"{base}-{counter}"
+
+
+def _validate_file_sizes(files: list[dict]) -> None:
+    """
+    Validate that files don't exceed size limits.
+    """
+    if len(files) > settings.max_files_per_commit:
+        raise ValueError(
+            f"Too many files: {len(files)} > {settings.max_files_per_commit}"
+        )
+
+    for f in files:
+        content_size = len(f.get("content", "").encode("utf-8"))
+        if content_size > settings.max_file_size_bytes:
+            raise ValueError(
+                f"File {f.get('path', 'unknown')} too large: {content_size} bytes > {settings.max_file_size_bytes}"
+            )
 
 
 async def _run_git_worker(
@@ -85,28 +151,55 @@ async def _run_git_worker(
         repo_path, branch_existed = clone_repo(
             task.repo, token, workdir, branch=task.branch
         )
-        branch = task.branch or f"nexus/{task.id[:8]}"
+
+        # Generate unique branch name if needed
+        if not task.branch:
+            # Get existing branches (simplified — in production you'd query GitHub API)
+            task.branch = _generate_unique_branch_name(task.id, [])
+            db.commit()
+
+        branch = task.branch
         if not branch_existed:
             create_branch(repo_path, branch)
-            task.branch = branch
             db.commit()
+
+        # Check for cancellation before expensive LLM call
+        if _is_task_cancelled(db, task.id):
+            return json.dumps({"summary": "Task was cancelled", "files_changed": []})
+
+        # Get org-specific system prompt if available
+        system_prompt = _get_agent_system_prompt(
+            db, agent_run.agent_key, task.organization_id
+        )
 
         raw = await run_worker(
             agent_run.agent_key,
-            node["system"],
+            system_prompt,
             agent_run.instructions,
             context,
             node.get("uses_browse", False),
         )
+
+        # Check for cancellation after LLM call
+        if _is_task_cancelled(db, task.id):
+            return json.dumps({"summary": "Task was cancelled", "files_changed": []})
+
         parsed = json.loads(raw)
         files = parsed.get("files", [])
         summary = parsed.get("summary", "change")
+
+        # Validate file sizes
+        _validate_file_sizes(files)
 
         if files:
             write_files(repo_path, files)
             commit_and_push(
                 repo_path, branch, f"{node['label']}: {summary}", token, task.repo
             )
+
+        # Track LLM call and estimate tokens
+        task.llm_call_count += 1
+        task.estimated_tokens += len(raw) // 4  # rough estimate
 
         return json.dumps(
             {"summary": summary, "files_changed": [f["path"] for f in files]}
@@ -118,15 +211,31 @@ async def _run_git_worker(
 async def _execute_leaf(
     db: Session, task: Task, agent_run: AgentRun, node: dict, context: str
 ) -> str:
+    # Check for cancellation
+    if _is_task_cancelled(db, task.id):
+        return json.dumps({"summary": "Task was cancelled"})
+
+    # Get org-specific system prompt if available
+    system_prompt = _get_agent_system_prompt(
+        db, agent_run.agent_key, task.organization_id
+    )
+
     if node.get("uses_git"):
         return await _run_git_worker(db, task, agent_run, node, context)
-    return await run_worker(
+
+    result = await run_worker(
         agent_run.agent_key,
-        node["system"],
+        system_prompt,
         agent_run.instructions,
         context,
         node.get("uses_browse", False),
     )
+
+    # Track LLM call and estimate tokens
+    task.llm_call_count += 1
+    task.estimated_tokens += len(result) // 4  # rough estimate
+
+    return result
 
 
 @celery_app.task(
@@ -138,17 +247,25 @@ async def _execute_leaf(
 def run_agent_node(self, agent_run_id: str):
     """
     Runs exactly one node in the org chart. Managers delegate to their direct
-    reports and stop (their own completion is driven later, from
-    _on_child_finished, once every report is in). Leaf workers do real work —
-    git changes, live web research, or a plain LLM call — then immediately
-    notify their parent.
+    reports and stop. Leaf workers do real work.
     """
     db: Session = SessionLocal()
     try:
         agent_run = db.query(AgentRun).filter_by(id=agent_run_id).first()
         if not agent_run:
             return
+
         task = db.query(Task).filter_by(id=agent_run.task_id).first()
+        if not task:
+            return
+
+        # Check if task was cancelled
+        if task.status == "cancelled":
+            agent_run.status = "cancelled"
+            agent_run.completed_at = datetime.utcnow()
+            db.commit()
+            return
+
         node = ORG_CHART[agent_run.agent_key]
 
         logger.info(
@@ -156,7 +273,14 @@ def run_agent_node(self, agent_run_id: str):
             extra={"task_id": task.id, "agent_key": agent_run.agent_key},
         )
 
+        # Mark as running and set started_at
         agent_run.status = "running"
+        agent_run.started_at = datetime.utcnow()
+
+        # Set task started_at if this is the CEO (root agent)
+        if not agent_run.parent_id and not task.started_at:
+            task.started_at = datetime.utcnow()
+
         db.commit()
 
         if node["reports"]:
@@ -176,6 +300,7 @@ def run_agent_node(self, agent_run_id: str):
             )
             agent_run.status = "done"
             agent_run.result = result
+            agent_run.completed_at = datetime.utcnow()
             db.commit()
             _on_child_finished(db, agent_run)
 
@@ -189,6 +314,7 @@ def run_agent_node(self, agent_run_id: str):
         if agent_run:
             agent_run.status = "failed"
             agent_run.result = str(e)
+            agent_run.completed_at = datetime.utcnow()
             db.commit()
             _on_child_finished(db, agent_run)
     finally:
@@ -196,9 +322,21 @@ def run_agent_node(self, agent_run_id: str):
 
 
 def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: dict):
+    # Check for cancellation
+    if _is_task_cancelled(db, task.id):
+        agent_run.status = "cancelled"
+        agent_run.completed_at = datetime.utcnow()
+        db.commit()
+        return
+
     existing_children = _children(db, agent_run.id)
     if not existing_children:
-        planned = asyncio.run(delegate(node["system"], agent_run.instructions))
+        # Get org-specific system prompt if available
+        system_prompt = _get_agent_system_prompt(
+            db, agent_run.agent_key, task.organization_id
+        )
+
+        planned = asyncio.run(delegate(system_prompt, agent_run.instructions))
         if not planned:
             planned = [
                 {
@@ -206,6 +344,10 @@ def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: dict):
                     "instructions": agent_run.instructions,
                 }
             ]
+
+        # Track LLM call
+        task.llm_call_count += 1
+
         for i, item in enumerate(planned):
             db.add(
                 AgentRun(
@@ -231,7 +373,14 @@ def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: dict):
 
 def _on_child_finished(db: Session, child: AgentRun):
     if not child.parent_id:
-        return  # CEO itself finished — handled by _finalize_task from its own review step
+        # CEO finished — finalize the task
+        _finalize_task(db, child)
+        return
+
+    # Check for cancellation
+    task = db.query(Task).filter_by(id=child.task_id).first()
+    if task and task.status == "cancelled":
+        return
 
     parent = db.query(AgentRun).filter_by(id=child.parent_id).first()
     parent_node = ORG_CHART[parent.agent_key]
@@ -249,12 +398,12 @@ def _on_child_finished(db: Session, child: AgentRun):
             or (s.status == "pending" and s.order_index < child.order_index)
             for s in siblings
         ):
-            return  # earlier step still catching up
+            return
     else:
         if any(s.status in ("pending", "running") for s in siblings):
-            return  # still waiting on other parallel siblings
+            return
 
-    # --- Atomic guard: only ONE worker proceeds to review ---
+    # Atomic guard: only ONE worker proceeds to review
     if not _try_acquire_review(db, parent.id):
         logger.info(
             "Review already claimed by another worker",
@@ -267,13 +416,31 @@ def _on_child_finished(db: Session, child: AgentRun):
         parent.result = "One or more team members failed: " + _compile_context(
             [s for s in siblings if s.status == "failed"]
         )
+        parent.completed_at = datetime.utcnow()
         db.commit()
         _propagate(db, parent)
         return
 
-    decision = asyncio.run(
-        review(parent_node["review_system"], _compile_context(siblings))
+    # Check for cancellation before review
+    if _is_task_cancelled(db, child.task_id):
+        parent.status = "cancelled"
+        parent.completed_at = datetime.utcnow()
+        db.commit()
+        _propagate(db, parent)
+        return
+
+    # Get org-specific review prompt if available
+    review_prompt = _get_agent_system_prompt(
+        db, parent.agent_key + "_review", task.organization_id
     )
+    if review_prompt == ORG_CHART[parent.agent_key]["system"]:
+        # No override, use default review_system
+        review_prompt = parent_node["review_system"]
+
+    decision = asyncio.run(review(review_prompt, _compile_context(siblings)))
+
+    # Track LLM call
+    task.llm_call_count += 1
 
     if decision.get("decision") == "revise" and decision.get("revisions"):
         applied_any = False
@@ -305,12 +472,12 @@ def _on_child_finished(db: Session, child: AgentRun):
                     if s.status == "pending":
                         run_agent_node.delay(s.id)
             return
-        # every requested revision had already hit its cap — fall through to approve
 
     parent.status = "done"
     parent.result = json.dumps(
         {"summary": decision.get("summary", "Team completed its work.")}
     )
+    parent.completed_at = datetime.utcnow()
 
     if parent.agent_key == "coding_head" and task.repo and task.branch:
         try:
@@ -351,15 +518,36 @@ def _propagate(db: Session, finished_manager: AgentRun):
         return
 
     # This manager had no parent — it was the CEO. Finalize the whole task.
-    task = db.query(Task).filter_by(id=finished_manager.task_id).first()
+    _finalize_task(db, finished_manager)
+
+
+def _finalize_task(db: Session, ceo_run: AgentRun):
+    """Finalize the task when the CEO completes."""
+    task = db.query(Task).filter_by(id=ceo_run.task_id).first()
+    if not task:
+        return
+
     try:
-        result = json.loads(finished_manager.result) if finished_manager.result else {}
+        result = json.loads(ceo_run.result) if ceo_run.result else {}
     except json.JSONDecodeError:
         result = {}
-    task.final_report = result.get("summary", finished_manager.result)
+
+    task.final_report = result.get("summary", ceo_run.result)
     task.status = (
         "failed"
-        if finished_manager.status == "failed"
+        if ceo_run.status == "failed"
         else ("review" if task.branch else "done")
     )
+    task.completed_at = datetime.utcnow()
     db.commit()
+
+    # Send webhook if configured
+    if task.callback_url:
+        try:
+            asyncio.run(send_webhook(task))
+        except Exception as e:
+            logger.error(f"Failed to send webhook for task {task.id}: {e}")
+
+
+# Import here to avoid circular dependency
+from .task_timeout import cleanup_stale_tasks
