@@ -1,0 +1,42 @@
+# --- /etc/systemd/system/nexus-api.service ---
+[Unit]
+Description=Nexus Orchestrator API
+After=network.target postgresql.service redis.service
+
+[Service]
+User=deploy
+WorkingDirectory=/opt/nexus-orchestrator
+EnvironmentFile=/opt/nexus-orchestrator/.env
+ExecStart=/opt/nexus-orchestrator/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8010
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+# --- /etc/systemd/system/nexus-worker.service ---
+[Unit]
+Description=Nexus Orchestrator Celery Worker
+After=network.target postgresql.service redis.service
+
+[Service]
+User=deploy
+WorkingDirectory=/opt/nexus-orchestrator
+EnvironmentFile=/opt/nexus-orchestrator/.env
+ExecStart=/opt/nexus-orchestrator/venv/bin/celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+
+# --- Setup (once) ---
+# cd /opt && git clone <your repo> nexus-orchestrator
+# cd nexus-orchestrator && python3 -m venv venv && venv/bin/pip install -r requirements.txt
+# cp .env.example .env && nano .env   # fill in real values
+# sudo cp deploy/*.service /etc/systemd/system/
+# sudo systemctl daemon-reload
+# sudo systemctl enable --now nexus-api nexus-worker
+# sudo systemctl status nexus-api nexus-worker   # confirm both are "active (running)"
