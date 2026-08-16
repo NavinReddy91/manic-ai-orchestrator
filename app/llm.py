@@ -1,3 +1,15 @@
+"""
+LLM provider abstraction. Supports multiple backends via environment config:
+  - anthropic  (Claude)
+  - openai     (GPT-4o, etc.)
+  - groq       (Llama, Mixtral — fast, cheap)
+  - gemini     (Google Gemini)
+  - openrouter (any model via OpenRouter)
+
+Set LLM_PROVIDER in .env to choose. Each provider uses its own API format.
+All providers expose the same call_llm() interface.
+"""
+
 import json
 import logging
 import httpx
@@ -6,21 +18,23 @@ from .web_tools import search_web, fetch_page_text
 
 logger = logging.getLogger(__name__)
 
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-6"
+
+# ---------------------------------------------------------------------------
+# Provider implementations
+# ---------------------------------------------------------------------------
 
 
-async def call_claude(system: str, user_message: str, max_tokens: int = 2000) -> str:
+async def _call_anthropic(system: str, user_message: str, max_tokens: int) -> str:
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
-            ANTHROPIC_URL,
+            "https://api.anthropic.com/v1/messages",
             headers={
-                "x-api-key": settings.anthropic_api_key,
+                "x-api-key": settings.llm_api_key,
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             },
             json={
-                "model": MODEL,
+                "model": settings.llm_model,
                 "max_tokens": max_tokens,
                 "system": system,
                 "messages": [{"role": "user", "content": user_message}],
@@ -34,14 +48,101 @@ async def call_claude(system: str, user_message: str, max_tokens: int = 2000) ->
         return "\n".join(text_blocks)
 
 
-async def call_claude_with_browsing(
+async def _call_openai_compatible(
+    system: str, user_message: str, max_tokens: int, base_url: str
+) -> str:
+    """Works for OpenAI, Groq, OpenRouter, and any OpenAI-compatible API."""
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {settings.llm_api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": settings.llm_model,
+                "max_tokens": max_tokens,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user_message},
+                ],
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+async def _call_openai(system: str, user_message: str, max_tokens: int) -> str:
+    return await _call_openai_compatible(
+        system, user_message, max_tokens, "https://api.openai.com/v1"
+    )
+
+
+async def _call_groq(system: str, user_message: str, max_tokens: int) -> str:
+    return await _call_openai_compatible(
+        system, user_message, max_tokens, "https://api.groq.com/openai/v1"
+    )
+
+
+async def _call_openrouter(system: str, user_message: str, max_tokens: int) -> str:
+    return await _call_openai_compatible(
+        system, user_message, max_tokens, "https://openrouter.ai/api/v1"
+    )
+
+
+async def _call_gemini(system: str, user_message: str, max_tokens: int) -> str:
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{settings.llm_model}:generateContent",
+            params={"key": settings.llm_api_key},
+            headers={"Content-Type": "application/json"},
+            json={
+                "system_instruction": {"parts": [{"text": system}]},
+                "contents": [{"parts": [{"text": user_message}]}],
+                "generationConfig": {"maxOutputTokens": max_tokens},
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+_PROVIDERS = {
+    "anthropic": _call_anthropic,
+    "openai": _call_openai,
+    "groq": _call_groq,
+    "gemini": _call_gemini,
+    "openrouter": _call_openrouter,
+}
+
+
+# ---------------------------------------------------------------------------
+# Public interface
+# ---------------------------------------------------------------------------
+
+
+async def call_llm(system: str, user_message: str, max_tokens: int = 2000) -> str:
+    """
+    Call the configured LLM provider. Set LLM_PROVIDER and LLM_API_KEY in .env.
+    """
+    provider = settings.llm_provider.lower()
+    if provider not in _PROVIDERS:
+        raise ValueError(
+            f"Unknown LLM provider: {provider}. Choose from: {list(_PROVIDERS.keys())}"
+        )
+
+    logger.info(f"Calling LLM: provider={provider}, model={settings.llm_model}")
+    return await _PROVIDERS[provider](system, user_message, max_tokens)
+
+
+async def call_llm_with_browsing(
     system: str, user_message: str, max_rounds: int = 3
 ) -> str:
     """
-    A light agentic loop for research/marketing agents: the model can ask for a
-    live search or a live page fetch, we run it and hand back real results, for
-    up to `max_rounds` — then it must give a final answer grounded in what it
-    actually found (not memory).
+    Agentic loop: the model can request web search or page fetch by putting
+    SEARCH: or FETCH: as the first line of its reply. Runs up to max_rounds
+    iterations, then forces a final answer.
     """
     browsing_instructions = (
         "\n\nYou have live web access. To use it, put ONE of these as the very "
@@ -57,7 +158,7 @@ async def call_claude_with_browsing(
     transcript = user_message
 
     for _ in range(max_rounds):
-        reply = await call_claude(system_with_tools, transcript)
+        reply = await call_llm(system_with_tools, transcript)
         first_line = reply.strip().split("\n", 1)[0].strip()
 
         if first_line.upper().startswith("SEARCH:"):
@@ -83,8 +184,8 @@ async def call_claude_with_browsing(
 
         return reply  # final answer, no more tool calls requested
 
-    # ran out of rounds — force a final answer with what's been gathered so far
-    final = await call_claude(
+    # ran out of rounds — force a final answer
+    final = await call_llm(
         system, transcript + "\n\nGive your final answer now, no more searching."
     )
     return final
@@ -92,7 +193,7 @@ async def call_claude_with_browsing(
 
 async def delegate(manager_system: str, brief: str) -> list[dict]:
     """Used by any manager node (CEO or a department head) to fan out work."""
-    raw = await call_claude(manager_system, brief)
+    raw = await call_llm(manager_system, brief)
     try:
         return json.loads(raw)["delegations"]
     except (json.JSONDecodeError, KeyError, TypeError):
@@ -101,7 +202,7 @@ async def delegate(manager_system: str, brief: str) -> list[dict]:
 
 async def review(review_system: str, team_results: str) -> dict:
     """Used by any manager node to approve or send work back for revision."""
-    raw = await call_claude(review_system, team_results)
+    raw = await call_llm(review_system, team_results)
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -117,5 +218,5 @@ async def run_worker(
         else f"{instructions}\n\n---\nContext from teammates so far:\n{context}"
     )
     if uses_browse:
-        return await call_claude_with_browsing(system, message)
-    return await call_claude(system, message)
+        return await call_llm_with_browsing(system, message)
+    return await call_llm(system, message)
