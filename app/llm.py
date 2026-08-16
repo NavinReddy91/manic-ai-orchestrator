@@ -5,9 +5,16 @@ LLM provider abstraction. Supports multiple backends via environment config:
   - groq       (Llama, Mixtral — fast, cheap)
   - gemini     (Google Gemini)
   - openrouter (any model via OpenRouter)
+  - local      (Self-hosted: Ollama, vLLM, LM Studio, or any OpenAI-compatible API)
 
 Set LLM_PROVIDER in .env to choose. Each provider uses its own API format.
 All providers expose the same call_llm() interface.
+
+For local models (Ollama, vLLM, etc.), set:
+  LLM_PROVIDER=local
+  LLM_BASE_URL=http://localhost:11434/v1  (Ollama default)
+  LLM_MODEL=qwen2.5:3b
+  LLM_API_KEY=  (leave empty or set to any value — most local servers don't require it)
 """
 
 import json
@@ -91,6 +98,23 @@ async def _call_openrouter(system: str, user_message: str, max_tokens: int) -> s
     )
 
 
+async def _call_local(system: str, user_message: str, max_tokens: int) -> str:
+    """
+    For self-hosted models: Ollama, vLLM, LM Studio, or any OpenAI-compatible API.
+    Uses LLM_BASE_URL from config (e.g., http://localhost:11434/v1 for Ollama).
+    """
+    if not settings.llm_base_url:
+        raise ValueError("LLM_BASE_URL must be set when using LLM_PROVIDER=local")
+
+    # Ollama and most local servers don't require an API key, but we send one anyway
+    # (some servers ignore it, some require any non-empty value)
+    api_key = settings.llm_api_key or "ollama"
+
+    return await _call_openai_compatible(
+        system, user_message, max_tokens, settings.llm_base_url
+    )
+
+
 async def _call_gemini(system: str, user_message: str, max_tokens: int) -> str:
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
@@ -114,6 +138,7 @@ _PROVIDERS = {
     "groq": _call_groq,
     "gemini": _call_gemini,
     "openrouter": _call_openrouter,
+    "local": _call_local,
 }
 
 

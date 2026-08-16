@@ -79,13 +79,35 @@ Set `LLM_PROVIDER` in `.env`:
 
 | Provider | `LLM_PROVIDER` | Example `LLM_MODEL` | Notes |
 |---|---|---|---|
+| **Local (Ollama)** | `local` | `qwen2.5:3b` | Self-hosted, free, private |
+| **Local (vLLM)** | `local` | `Qwen/Qwen2.5-3B-Instruct` | Self-hosted, high performance |
 | **Groq** | `groq` | `llama-3.3-70b-versatile` | Fast, cheap, good for testing |
 | **Google Gemini** | `gemini` | `gemini-2.0-flash` | Good balance of speed/quality |
 | **OpenAI** | `openai` | `gpt-4o` | High quality, higher cost |
 | **Anthropic** | `anthropic` | `claude-sonnet-4-6` | High quality, higher cost |
 | **OpenRouter** | `openrouter` | `anthropic/claude-3.5-sonnet` | Access to many models via one API |
 
-**Recommendation for testing:** Start with Groq (`llama-3.3-70b-versatile`) — it's fast and cheap. Switch to Gemini or GPT-4o for production when you need higher quality.
+### Using Local Models (Ollama, vLLM, etc.)
+
+For self-hosted models, set:
+```bash
+LLM_PROVIDER=local
+LLM_BASE_URL=http://localhost:11434/v1  # Ollama default
+LLM_MODEL=qwen2.5:3b
+LLM_API_KEY=  # leave empty or set to any value
+```
+
+**Ollama setup:**
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Pull and run Qwen 2.5 3B
+ollama pull qwen2.5:3b
+ollama serve  # starts on http://localhost:11434
+```
+
+**Recommendation for testing:** Start with your local Qwen 2.5 3B (free, private) or Groq (fast, cheap). Switch to Gemini or GPT-4o for production when you need higher quality.
 
 ## The Org Chart
 

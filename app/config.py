@@ -13,10 +13,13 @@ class Settings(BaseSettings):
     github_redirect_uri: str
 
     # --- LLM provider ---
-    # Options: anthropic, openai, groq, gemini, openrouter
+    # Options: anthropic, openai, groq, gemini, openrouter, local
     llm_provider: str = "groq"
     llm_api_key: str
     llm_model: str = "llama-3.3-70b-versatile"  # default for Groq
+    llm_base_url: str = (
+        ""  # required for local provider (e.g., http://localhost:11434/v1)
+    )
 
     # --- Infrastructure ---
     database_url: str
