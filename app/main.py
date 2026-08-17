@@ -71,10 +71,18 @@ POSSIBLE_FRONTEND_DIRS = [
 
 FRONTEND_DIR = None
 for path in POSSIBLE_FRONTEND_DIRS:
+    logger.info(f"Checking frontend path: {path} (exists={path.exists()})")
     if path.exists() and (path / "index.html").exists():
         FRONTEND_DIR = path
-        logger.info(f"Frontend directory found at: {FRONTEND_DIR}")
+        logger.info(f"✓ Frontend directory found at: {FRONTEND_DIR}")
         break
+
+if not FRONTEND_DIR:
+    logger.warning(
+        "✗ Frontend directory not found in any location. Serving API-only mode."
+    )
+    logger.warning(f"Current working directory: {Path.cwd()}")
+    logger.warning(f"__file__ location: {Path(__file__)}")
 
 if FRONTEND_DIR:
     # Mount static files first (CSS, JS)
@@ -86,17 +94,50 @@ if FRONTEND_DIR:
         index_path = FRONTEND_DIR / "index.html"
         return FileResponse(index_path, media_type="text/html")
 else:
-    logger.warning("Frontend directory not found. Serving API-only mode.")
+    logger.warning("Frontend directory not found. Serving embedded fallback UI.")
 
-    @app.get("/")
+    @app.get("/", response_class=HTMLResponse)
     def root():
-        return {
-            "name": "Manic AI Orchestrator",
-            "version": "1.0.0",
-            "docs": "/docs",
-            "health": "/health",
-            "message": "Frontend not found. API is running. Visit /docs for API documentation.",
-        }
+        """Serve embedded fallback UI."""
+        return """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Manic AI - Deployment Issue</title>
+            <style>
+                body { font-family: monospace; background: #0a0e1a; color: #00f0ff; padding: 2rem; }
+                .container { max-width: 800px; margin: 0 auto; }
+                h1 { color: #00f0ff; text-shadow: 0 0 10px rgba(0,240,255,0.5); }
+                .error { color: #ff3366; }
+                .info { background: rgba(0,240,255,0.1); padding: 1rem; border-left: 3px solid #00f0ff; margin: 1rem 0; }
+                code { background: rgba(0,0,0,0.3); padding: 0.2rem 0.5rem; border-radius: 3px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>⚠ Frontend Not Found</h1>
+                <p class="error">The frontend directory was not found during deployment.</p>
+                <div class="info">
+                    <strong>API Status:</strong> ✓ Running<br>
+                    <strong>Frontend:</strong> ✗ Not Found
+                </div>
+                <h2>Quick Links</h2>
+                <ul>
+                    <li><a href="/docs" style="color:#00f0ff">API Documentation (/docs)</a></li>
+                    <li><a href="/health" style="color:#00f0ff">Health Check (/health)</a></li>
+                </ul>
+                <h2>Troubleshooting</h2>
+                <p>Check Render logs for path resolution details. The app checked these locations:</p>
+                <ul>
+                    <li><code>Path(__file__).parent.parent / "frontend"</code></li>
+                    <li><code>Path.cwd() / "frontend"</code></li>
+                    <li><code>Path("/app/frontend")</code></li>
+                </ul>
+                <p>Ensure the <code>frontend/</code> directory is in your repository and deployed correctly.</p>
+            </div>
+        </body>
+        </html>
+        """
 
 
 @app.get("/health")
