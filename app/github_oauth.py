@@ -22,14 +22,26 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations/github", tags=["github"])
 
-# Only initialize if GitHub is configured
-_fernet = Fernet(settings.token_encryption_key.encode())
-_redis_client = (
-    redis.Redis.from_url(settings.redis_url, decode_responses=True)
-    if settings.redis_url
-    else None
-)
+# Lazy initialization - only create when needed
+_fernet = None
+_redis_client = None
 _OAUTH_STATE_TTL = 600
+
+
+def _get_fernet():
+    """Lazy Fernet initialization."""
+    global _fernet
+    if _fernet is None:
+        _fernet = Fernet(settings.token_encryption_key.encode())
+    return _fernet
+
+
+def _get_redis():
+    """Lazy Redis initialization."""
+    global _redis_client
+    if _redis_client is None and settings.redis_url:
+        _redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    return _redis_client
 
 
 def _check_github_config():
@@ -39,7 +51,7 @@ def _check_github_config():
             status_code=501,
             detail="GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
         )
-    if not _redis_client:
+    if not _get_redis():
         raise HTTPException(
             status_code=503,
             detail="Redis not configured. GitHub OAuth requires Redis for state management.",
@@ -64,7 +76,7 @@ async def connect(
         raise HTTPException(status_code=404, detail="Organization not found")
 
     state = secrets.token_urlsafe(24)
-    _redis_client.setex(
+    _get_redis().setex(
         f"oauth_state:{state}",
         _OAUTH_STATE_TTL,
         json.dumps({"user_id": user["sub"], "organization_id": organization_id}),
@@ -85,10 +97,10 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
     """Handle GitHub OAuth callback."""
     _check_github_config()
 
-    raw = _redis_client.get(f"oauth_state:{state}")
+    raw = _get_redis().get(f"oauth_state:{state}")
     if not raw:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
-    _redis_client.delete(f"oauth_state:{state}")
+    _get_redis().delete(f"oauth_state:{state}")
 
     pending = json.loads(raw)
     user_id = pending["user_id"]
@@ -118,7 +130,7 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
         )
         github_login = who_resp.json().get("login")
 
-    encrypted = _fernet.encrypt(access_token.encode()).decode()
+    encrypted = _get_fernet().encrypt(access_token.encode()).decode()
 
     existing = (
         db.query(ConnectedAccount)
@@ -159,4 +171,4 @@ def get_github_token(db: Session, user_id: str, organization_id: str) -> str | N
     )
     if not row:
         return None
-    return _fernet.decrypt(row.encrypted_token.encode()).decode()
+    return _get_fernet().decrypt(row.encrypted_token.encode()).decode()
