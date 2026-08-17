@@ -1,5 +1,5 @@
 """
-Sonic AI — GitHub OAuth Integration (Optional)
+Manic AI — GitHub OAuth Integration (Optional)
 Only active if GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are configured.
 """
 

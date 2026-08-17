@@ -1,5 +1,5 @@
 """
-Sonic AI Orchestrator — FastAPI Application
+Manic AI Orchestrator — FastAPI Application
 """
 
 from contextlib import asynccontextmanager
@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Sonic AI Orchestrator",
+    title="Manic AI Orchestrator",
     version="1.0.0",
     description="Multi-agent AI orchestration engine with hierarchical task delegation",
     lifespan=lifespan,
@@ -56,13 +56,13 @@ app.include_router(templates_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "sonic-ai-orchestrator", "version": "1.0.0"}
+    return {"status": "ok", "service": "manic-ai-orchestrator", "version": "1.0.0"}
 
 
 @app.get("/")
 def root():
     return {
-        "name": "Sonic AI Orchestrator",
+        "name": "Manic AI Orchestrator",
         "version": "1.0.0",
         "docs": "/docs",
         "health": "/health",

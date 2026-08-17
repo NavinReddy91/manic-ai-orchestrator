@@ -1,4 +1,4 @@
-# Sonic AI Orchestrator — Docker Compose
+# Manic AI Orchestrator — Docker Compose
 # For local development or VPS deployment
 
 services:
@@ -7,7 +7,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: sonic_ai
+      POSTGRES_DB: manic_ai
       POSTGRES_USER: sonic
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sonic_password}
     volumes:
@@ -40,7 +40,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/sonic_ai
+      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/manic_ai
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
@@ -57,7 +57,7 @@ services:
     env_file: .env
     command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
     environment:
-      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/sonic_ai
+      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/manic_ai
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:

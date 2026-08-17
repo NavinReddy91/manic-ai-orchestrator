@@ -1,5 +1,5 @@
 """
-Sonic AI — Simple API Key Authentication
+Manic AI — Simple API Key Authentication
 If API_KEY is not set in .env, authentication is disabled (for testing).
 """
 

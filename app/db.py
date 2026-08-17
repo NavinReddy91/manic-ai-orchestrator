@@ -1,5 +1,5 @@
 """
-Sonic AI — Database Configuration
+Manic AI — Database Configuration
 Supports PostgreSQL (production) and SQLite (development/Render free tier).
 """
 

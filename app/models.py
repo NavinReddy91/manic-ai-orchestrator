@@ -1,5 +1,5 @@
 """
-Sonic AI — Database Models
+Manic AI — Database Models
 """
 
 import uuid
@@ -52,7 +52,7 @@ class ConnectedAccount(Base):
 
 
 class Task(Base):
-    """A user request processed by the Sonic AI agent hierarchy."""
+    """A user request processed by the Manic AI agent hierarchy."""
 
     __tablename__ = "tasks"
 

@@ -1,5 +1,5 @@
 """
-Sonic AI Orchestrator — Configuration
+Manic AI Orchestrator — Configuration
 All fields have sensible defaults. Only LLM_API_KEY is needed to get started.
 """
 
@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     llm_base_url: str = ""  # for local: http://localhost:11434/v1
 
     # --- Infrastructure ---
-    database_url: str = "sqlite:///./sonic_ai.db"  # SQLite for local/Render free
+    database_url: str = "sqlite:///./manic_ai.db"  # SQLite for local/Render free
     redis_url: str = "redis://localhost:6379/0"
 
     # --- Auth ---

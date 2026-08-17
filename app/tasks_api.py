@@ -1,5 +1,5 @@
 """
-Sonic AI — Tasks API
+Manic AI — Tasks API
 Create, list, get, and cancel tasks.
 """
 

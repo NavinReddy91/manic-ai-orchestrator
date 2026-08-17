@@ -1,4 +1,4 @@
-# Sonic AI Orchestrator - Deployment Guide
+# Manic AI Orchestrator - Deployment Guide
 
 ## ✅ What Changed
 
@@ -10,7 +10,7 @@ Your project has been completely rebranded and simplified:
 - ❌ Complex setup with multiple required services
 - ❌ Hard to deploy standalone
 
-### After (Sonic AI)
+### After (Manic AI)
 - ✅ **Standalone** - no external dependencies
 - ✅ **Simple API key auth** - or no auth for testing
 - ✅ **Render-ready** - deploys on free tier
@@ -58,10 +58,10 @@ Render will create:
 ### Step 5: Test
 ```bash
 # Get your Render URL from dashboard
-curl https://sonic-ai-api.onrender.com/health
+curl https://manic-ai-api.onrender.com/health
 
 # Should return:
-{"status":"ok","service":"sonic-ai-orchestrator","version":"1.0.0"}
+{"status":"ok","service":"manic-ai-orchestrator","version":"1.0.0"}
 ```
 
 ---
@@ -349,7 +349,7 @@ Interactive API docs available at:
 
 ## 🎉 You're Ready!
 
-Your Sonic AI Orchestrator is now:
+Your Manic AI Orchestrator is now:
 - ✅ Completely standalone
 - ✅ Ready for Render deployment
 - ✅ Free tier compatible

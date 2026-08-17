@@ -1,5 +1,5 @@
 """
-Sonic AI — Agent Organization Chart
+Manic AI — Agent Organization Chart
 Each key is an agent. `reports` lists its direct reports — that's what turns
 this from a flat pipeline into a real hierarchy: a manager delegates to its
 reports, reviews what comes back, can send work back for a fix, and only then

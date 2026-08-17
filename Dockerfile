@@ -1,4 +1,4 @@
-# Sonic AI Orchestrator — Dockerfile
+# Manic AI Orchestrator — Dockerfile
 FROM python:3.12-slim
 
 # Install git (required for coding agents)

@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; SonicResearchAgent/1.0)"}
+_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; ManicResearchAgent/1.0)"}
 
 
 async def search_web(query: str, max_results: int = 5) -> list[dict]:

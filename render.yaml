@@ -1,10 +1,10 @@
-# Sonic AI Orchestrator — Render Blueprint
+# Manic AI Orchestrator — Render Blueprint
 # Deploy this project to Render with one click
 
 services:
   # Web service (FastAPI)
   - type: web
-    name: sonic-ai-api
+    name: manic-ai-api
     env: python
     region: oregon
     plan: free
@@ -16,12 +16,12 @@ services:
         value: "3.12.0"
       - key: DATABASE_URL
         fromDatabase:
-          name: sonic-ai-db
+          name: manic-ai-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: sonic-ai-redis
+          name: manic-ai-redis
           property: connectionString
       - key: LLM_PROVIDER
         value: groq
@@ -40,7 +40,7 @@ services:
 
   # Background worker (Celery)
   - type: worker
-    name: sonic-ai-worker
+    name: manic-ai-worker
     env: python
     region: oregon
     plan: free
@@ -51,12 +51,12 @@ services:
         value: "3.12.0"
       - key: DATABASE_URL
         fromDatabase:
-          name: sonic-ai-db
+          name: manic-ai-db
           property: connectionString
       - key: REDIS_URL
         fromService:
           type: redis
-          name: sonic-ai-redis
+          name: manic-ai-redis
           property: connectionString
       - key: LLM_PROVIDER
         value: groq
@@ -69,7 +69,7 @@ services:
 
   # Redis for Celery
   - type: redis
-    name: sonic-ai-redis
+    name: manic-ai-redis
     region: oregon
     plan: free
     maxmemoryPolicy: noeviction
@@ -77,8 +77,8 @@ services:
 
 databases:
   # PostgreSQL database
-  - name: sonic-ai-db
+  - name: manic-ai-db
     region: oregon
     plan: free
-    databaseName: sonic_ai
-    user: sonic_ai
+    databaseName: manic_ai
+    user: manic_ai

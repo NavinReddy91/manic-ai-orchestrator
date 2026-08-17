@@ -1,5 +1,5 @@
 """
-Sonic AI — Organizations API
+Manic AI — Organizations API
 Create and list organizations.
 """
 
