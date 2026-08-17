@@ -56,9 +56,10 @@ async def _call_anthropic(system: str, user_message: str, max_tokens: int) -> st
 
 
 async def _call_openai_compatible(
-    system: str, user_message: str, max_tokens: int, base_url: str
+    system: str, user_message: str, max_tokens: int, base_url: str, model_override: str | None = None
 ) -> str:
     """Works for OpenAI, Groq, OpenRouter, and any OpenAI-compatible API."""
+    model = model_override or settings.llm_model
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
@@ -67,7 +68,7 @@ async def _call_openai_compatible(
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.llm_model,
+                "model": model,
                 "max_tokens": max_tokens,
                 "messages": [
                     {"role": "system", "content": system},
@@ -75,7 +76,14 @@ async def _call_openai_compatible(
                 ],
             },
         )
-        resp.raise_for_status()
+        if resp.status_code != 200:
+            err_detail = ""
+            try:
+                err_json = resp.json()
+                err_detail = err_json.get("error", {}).get("message", resp.text)
+            except Exception:
+                err_detail = resp.text
+            raise RuntimeError(f"LLM API Error ({resp.status_code}) for model '{model}': {err_detail}")
         data = resp.json()
         return data["choices"][0]["message"]["content"]
 
@@ -86,10 +94,42 @@ async def _call_openai(system: str, user_message: str, max_tokens: int) -> str:
     )
 
 
+GROQ_FALLBACK_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "mixtral-8x7b-32768",
+]
+
+
 async def _call_groq(system: str, user_message: str, max_tokens: int) -> str:
-    return await _call_openai_compatible(
-        system, user_message, max_tokens, "https://api.groq.com/openai/v1"
-    )
+    # Try primary model first
+    try:
+        return await _call_openai_compatible(
+            system, user_message, max_tokens, "https://api.groq.com/openai/v1"
+        )
+    except RuntimeError as e:
+        # If 404 model not found, attempt fallbacks
+        if "404" in str(e):
+            logger.warning(f"Groq model '{settings.llm_model}' returned 404. Trying fallback models...")
+            for fallback_model in GROQ_FALLBACK_MODELS:
+                if fallback_model == settings.llm_model:
+                    continue
+                try:
+                    logger.info(f"Attempting Groq fallback model: {fallback_model}")
+                    return await _call_openai_compatible(
+                        system,
+                        user_message,
+                        max_tokens,
+                        "https://api.groq.com/openai/v1",
+                        model_override=fallback_model,
+                    )
+                except RuntimeError as fb_err:
+                    if "404" in str(fb_err):
+                        continue
+                    raise fb_err
+        raise e
 
 
 async def _call_openrouter(system: str, user_message: str, max_tokens: int) -> str:
