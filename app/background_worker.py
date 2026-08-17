@@ -124,7 +124,11 @@ def _compile_context(children: list[AgentRun]) -> str:
     parts = []
     for c in children:
         label = ORG_CHART[c.agent_key]["label"]
-        parts.append(f"[{label} — {c.status}]\n{c.result or '(no result)'}")
+        res = c.result or "(no result)"
+        # Truncate teammate output to 500 chars max to conserve input tokens
+        if len(res) > 500:
+            res = res[:500] + "... [context truncated for token optimization]"
+        parts.append(f"[{label} — {c.status}]\n{res}")
     return "\n\n".join(parts)
 
 
@@ -340,13 +344,10 @@ async def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: 
         db.commit()
         existing_children = _children(db, agent_run.id)
 
-    if node.get("sequential"):
-        # Sequential execution: run children one after another
-        for c in existing_children:
-            await execute_agent_node(c.id)
-    else:
-        # Parallel execution: run all children concurrently
-        await asyncio.gather(*[execute_agent_node(c.id) for c in existing_children])
+    # Paced execution: run children sequentially with 1 second delay to stagger API token intake
+    for c in existing_children:
+        await execute_agent_node(c.id)
+        await asyncio.sleep(1)
 
 
 async def _on_child_finished(db: Session, child: AgentRun):

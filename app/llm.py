@@ -187,7 +187,7 @@ _PROVIDERS = {
 # ---------------------------------------------------------------------------
 
 
-async def call_llm(system: str, user_message: str, max_tokens: int = 2000) -> str:
+async def call_llm(system: str, user_message: str, max_tokens: int = 1000) -> str:
     """
     Call the configured LLM provider. Set LLM_PROVIDER and LLM_API_KEY in .env.
     """
@@ -223,7 +223,7 @@ async def call_llm_with_browsing(
     transcript = user_message
 
     for _ in range(max_rounds):
-        reply = await call_llm(system_with_tools, transcript)
+        reply = await call_llm(system_with_tools, transcript, max_tokens=1000)
         first_line = reply.strip().split("\n", 1)[0].strip()
 
         if first_line.upper().startswith("SEARCH:"):
@@ -251,14 +251,18 @@ async def call_llm_with_browsing(
 
     # ran out of rounds — force a final answer
     final = await call_llm(
-        system, transcript + "\n\nGive your final answer now, no more searching."
+        system, transcript + "\n\nGive your final answer now, no more searching.", max_tokens=1000
     )
     return final
 
 
 async def delegate(manager_system: str, brief: str) -> list[dict]:
     """Used by any manager node (CEO or a department head) to fan out work."""
-    raw = await call_llm(manager_system, brief)
+    efficiency_hint = (
+        "\n\nIMPORTANT TOKEN SAVINGS INSTRUCTION: Delegate ONLY to the minimum necessary department head(s) or specialist(s) required for this specific brief. "
+        "Do NOT delegate to uninvolved departments (e.g. do not assign Marketing for coding tasks, or Coding for marketing tasks)."
+    )
+    raw = await call_llm(manager_system + efficiency_hint, brief, max_tokens=800)
     try:
         return json.loads(raw)["delegations"]
     except (json.JSONDecodeError, KeyError, TypeError):
@@ -267,7 +271,7 @@ async def delegate(manager_system: str, brief: str) -> list[dict]:
 
 async def review(review_system: str, team_results: str) -> dict:
     """Used by any manager node to approve or send work back for revision."""
-    raw = await call_llm(review_system, team_results)
+    raw = await call_llm(review_system, team_results, max_tokens=800)
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
@@ -284,4 +288,4 @@ async def run_worker(
     )
     if uses_browse:
         return await call_llm_with_browsing(system, message)
-    return await call_llm(system, message)
+    return await call_llm(system, message, max_tokens=1000)
