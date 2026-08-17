@@ -42,6 +42,17 @@ document.addEventListener('DOMContentLoaded', () => {
         currentOrgId = e.target.value;
         loadTasks();
     });
+
+    // Organization Modal handlers
+    document.getElementById('open-create-org-btn').addEventListener('click', openCreateOrgModal);
+    document.getElementById('close-create-org-modal').addEventListener('click', closeCreateOrgModal);
+    document.getElementById('cancel-create-org-btn').addEventListener('click', closeCreateOrgModal);
+    document.getElementById('confirm-create-org-btn').addEventListener('click', createOrganization);
+    
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeCreateOrgModal();
+    });
 });
 
 // Render organization chart
@@ -144,26 +155,32 @@ function renderTaskList(tasks) {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">◇</div>
-                <p>No active missions</p>
+                <p>No active missions for this organization</p>
             </div>
         `;
         return;
     }
     
-    container.innerHTML = tasks.map(task => `
-        <div class="task-item" onclick="showTaskDetail('${task.id}')">
-            <div class="task-item-header">
-                <span class="task-id">${task.id.substring(0, 8)}...</span>
-                <span class="task-status ${task.status}">${task.status}</span>
+    container.innerHTML = tasks.map(task => {
+        const isRunning = task.status === 'running' || task.status === 'planning';
+        return `
+            <div class="task-item ${isRunning ? 'task-running-pulse' : ''}" onclick="showTaskDetail('${task.id}')">
+                <div class="task-item-header">
+                    <span class="task-id">${task.id.substring(0, 8)}...</span>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <span class="task-status ${task.status}">${task.status}</span>
+                        ${isRunning ? `<button class="btn-danger-sm" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Stop running mission">⏹ Stop</button>` : ''}
+                    </div>
+                </div>
+                <div class="task-prompt">${escapeHtml(task.prompt.substring(0, 150))}${task.prompt.length > 150 ? '...' : ''}</div>
+                <div class="task-meta">
+                    <span>LLM Calls: ${task.llm_call_count}</span>
+                    <span>Tokens: ~${task.estimated_tokens}</span>
+                    <span>Created: ${formatDate(task.created_at)}</span>
+                </div>
             </div>
-            <div class="task-prompt">${escapeHtml(task.prompt.substring(0, 150))}${task.prompt.length > 150 ? '...' : ''}</div>
-            <div class="task-meta">
-                <span>LLM Calls: ${task.llm_call_count}</span>
-                <span>Tokens: ~${task.estimated_tokens}</span>
-                <span>Created: ${formatDate(task.created_at)}</span>
-            </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 // Deploy new task
@@ -240,10 +257,18 @@ async function showTaskDetail(taskId) {
 // Render task detail
 function renderTaskDetail(task) {
     const container = document.getElementById('task-detail-content');
+    const isRunning = task.status === 'running' || task.status === 'planning';
     
     let html = `
         <div class="detail-section">
-            <h4>Mission Info</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h4>Mission Info</h4>
+                ${isRunning ? `
+                    <button class="btn-danger abort-btn" onclick="cancelTask('${task.id}')">
+                        <span class="btn-icon">⏹</span> ABORT MISSION (STOP RUNNING)
+                    </button>
+                ` : ''}
+            </div>
             <div class="detail-field">
                 <span class="detail-label">Task ID:</span>
                 <span class="detail-value">${task.id}</span>
@@ -293,17 +318,92 @@ function renderTaskDetail(task) {
     // Add final report or execution error report
     if (task.final_report) {
         const isFailed = task.status === 'failed';
+        const isCancelled = task.status === 'cancelled';
+        const titleText = isFailed ? '⚠ Execution Failure Log' : (isCancelled ? '⏹ Mission Aborted Log' : 'Final Report');
+        const borderColor = isFailed ? '#ff3366' : (isCancelled ? '#ffaa00' : '#00f0ff');
+        const bgColor = isFailed ? 'rgba(255, 51, 102, 0.1)' : (isCancelled ? 'rgba(255, 170, 0, 0.1)' : 'rgba(0, 240, 255, 0.05)');
+        
         html += `
             <div class="detail-section">
-                <div class="final-report ${isFailed ? 'error-report' : ''}">
-                    <h4 style="${isFailed ? 'color: #ff3366;' : ''}">${isFailed ? '⚠ Execution Failure Log' : 'Final Report'}</h4>
-                    <div class="final-report-content" style="${isFailed ? 'border-color: #ff3366; background: rgba(255, 51, 102, 0.1); color: #ff99aa;' : ''}">${escapeHtml(task.final_report)}</div>
+                <div class="final-report">
+                    <h4 style="color: ${borderColor};">${titleText}</h4>
+                    <div class="final-report-content" style="border-color: ${borderColor}; background: ${bgColor}; color: ${isFailed ? '#ff99aa' : (isCancelled ? '#ffddaa' : '#e0f7ff')};">${escapeHtml(task.final_report)}</div>
                 </div>
             </div>
         `;
     }
     
     container.innerHTML = html;
+}
+
+// Cancel / Abort task execution
+async function cancelTask(taskId) {
+    if (!confirm('Are you sure you want to stop and abort this mission?')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to stop task');
+        }
+        
+        showNotification('Mission execution stopped', 'warning');
+        loadTasks();
+        showTaskDetail(taskId);
+    } catch (error) {
+        console.error('Error stopping task:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+// Create new organization boundary
+async function createOrganization() {
+    const input = document.getElementById('new-org-name');
+    const name = input.value.trim();
+    if (!name) {
+        showNotification('Please enter an organization name', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/organizations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+        });
+        
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.detail || 'Failed to create organization');
+        }
+        
+        const newOrg = await response.json();
+        showNotification(`Organization boundary '${newOrg.name}' created!`, 'success');
+        input.value = '';
+        closeCreateOrgModal();
+        
+        // Reload organizations & set active org boundary
+        await loadOrganizations();
+        const select = document.getElementById('org-select');
+        select.value = newOrg.id;
+        currentOrgId = newOrg.id;
+        loadTasks();
+    } catch (error) {
+        console.error('Error creating organization:', error);
+        showNotification(error.message, 'error');
+    }
+}
+
+function openCreateOrgModal() {
+    document.getElementById('create-org-modal').style.display = 'flex';
+    document.getElementById('new-org-name').focus();
+}
+
+function closeCreateOrgModal() {
+    document.getElementById('create-org-modal').style.display = 'none';
 }
 
 // Render agent tree recursively

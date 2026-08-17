@@ -57,10 +57,11 @@
                 <div class="input-header">
                     <label for="task-prompt">DEPLOY NEW MISSION</label>
                     <div class="org-selector">
-                        <label>ORG:</label>
+                        <label>ORG BOUNDARY:</label>
                         <select id="org-select">
                             <option value="">Select Organization</option>
                         </select>
+                        <button id="open-create-org-btn" class="btn-secondary" title="Create New Organization Boundary">+ Create Org</button>
                     </div>
                 </div>
                 <textarea 
@@ -120,6 +121,27 @@
             <a href="/docs" target="_blank">API DOCS</a>
         </div>
     </footer>
+
+    <!-- Create Organization Modal -->
+    <div id="create-org-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><span class="title-icon">❖</span> CREATE ORGANIZATION BOUNDARY</h3>
+                <button id="close-create-org-modal" class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Create an isolated organization workspace to manage tasks, code repositories, and agent access limits independently.</p>
+                <div class="form-group">
+                    <label for="new-org-name">ORGANIZATION NAME</label>
+                    <input type="text" id="new-org-name" placeholder="e.g. Acme Corp, CyberOps, Marketing Division" autofocus />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancel-create-org-btn" class="btn-cancel">Cancel</button>
+                <button id="confirm-create-org-btn" class="btn-primary">Create Organization</button>
+            </div>
+        </div>
+    </div>
 
     <div id="notification" class="notification"></div>
 
