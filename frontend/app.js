@@ -290,13 +290,14 @@ function renderTaskDetail(task) {
         `;
     }
     
-    // Add final report
-    if (task.final_report && task.status === 'done') {
+    // Add final report or execution error report
+    if (task.final_report) {
+        const isFailed = task.status === 'failed';
         html += `
             <div class="detail-section">
-                <div class="final-report">
-                    <h4>Final Report</h4>
-                    <div class="final-report-content">${escapeHtml(task.final_report)}</div>
+                <div class="final-report ${isFailed ? 'error-report' : ''}">
+                    <h4 style="${isFailed ? 'color: #ff3366;' : ''}">${isFailed ? '⚠ Execution Failure Log' : 'Final Report'}</h4>
+                    <div class="final-report-content" style="${isFailed ? 'border-color: #ff3366; background: rgba(255, 51, 102, 0.1); color: #ff99aa;' : ''}">${escapeHtml(task.final_report)}</div>
                 </div>
             </div>
         `;

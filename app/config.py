@@ -61,6 +61,17 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not self.llm_api_key:
+            import os
+            self.llm_api_key = (
+                os.getenv("LLM_API_KEY")
+                or os.getenv("GROQ_API_KEY")
+                or os.getenv("OPENAI_API_KEY")
+                or os.getenv("GEMINI_API_KEY")
+                or os.getenv("ANTHROPIC_API_KEY")
+                or os.getenv("OPENROUTER_API_KEY")
+                or ""
+            )
         if not self.token_encryption_key:
             self.token_encryption_key = Fernet.generate_key().decode()
         self._validate()
