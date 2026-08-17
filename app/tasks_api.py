@@ -1,6 +1,6 @@
 """
-Tasks API — create, list, get, cancel tasks.
-Includes rate limiting, audit logging, and webhook support.
+Sonic AI — Tasks API
+Create, list, get, and cancel tasks.
 """
 
 import logging

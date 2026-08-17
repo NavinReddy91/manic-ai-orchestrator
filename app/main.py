@@ -1,3 +1,7 @@
+"""
+Sonic AI Orchestrator — FastAPI Application
+"""
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,16 +22,31 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Manic AI Orchestrator", version="0.4.0", lifespan=lifespan)
+app = FastAPI(
+    title="Sonic AI Orchestrator",
+    version="1.0.0",
+    description="Multi-agent AI orchestration engine with hierarchical task delegation",
+    lifespan=lifespan,
+)
+
+# CORS configuration
+from .config import settings
+
+origins = (
+    [o.strip() for o in settings.allowed_origins.split(",")]
+    if settings.allowed_origins != "*"
+    else ["*"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://digimarkin.com", "https://nexus.digimarkin.com"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Register routers
 app.include_router(github_router)
 app.include_router(tasks_router)
 app.include_router(organizations_router)
@@ -37,4 +56,14 @@ app.include_router(templates_router)
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "manic-ai-orchestrator"}
+    return {"status": "ok", "service": "sonic-ai-orchestrator", "version": "1.0.0"}
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "Sonic AI Orchestrator",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "health": "/health",
+    }

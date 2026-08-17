@@ -1,6 +1,6 @@
 """
-Organizations API — create and list organizations.
-Includes audit logging.
+Sonic AI — Organizations API
+Create and list organizations.
 """
 
 import logging

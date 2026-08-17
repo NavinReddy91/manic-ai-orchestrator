@@ -1,20 +1,12 @@
 """
-One-click GitHub connect, scoped to a specific organization. Flow:
-  1. Frontend hits GET /integrations/github/connect?organization_id=... (with JWT)
-     -> we redirect to GitHub's authorize URL, encoding (user_id, organization_id)
-        in `state`
-  2. User approves on GitHub -> GitHub redirects to our /callback with `code`
-  3. We exchange `code` for an access token, encrypt it, store it against
-     (user_id, organization_id) — NOT just user_id. A task running under one
-     organization can only ever look up the token for that same organization.
-
-State is stored in Redis (not in-memory) so this works across multiple API
-workers and survives restarts.
+Sonic AI — GitHub OAuth Integration (Optional)
+Only active if GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are configured.
 """
 
 import json
 import secrets
 import httpx
+import logging
 import redis
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,12 +18,32 @@ from .auth import get_current_user
 from .models import ConnectedAccount, Organization
 from .db import get_db
 
-router = APIRouter(prefix="/integrations/github", tags=["github"])
-_fernet = Fernet(settings.token_encryption_key.encode())
+logger = logging.getLogger(__name__)
 
-# Redis-backed state store — safe across multiple workers and restarts.
-_redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
-_OAUTH_STATE_TTL = 600  # 10 minutes — states auto-expire
+router = APIRouter(prefix="/integrations/github", tags=["github"])
+
+# Only initialize if GitHub is configured
+_fernet = Fernet(settings.token_encryption_key.encode())
+_redis_client = (
+    redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    if settings.redis_url
+    else None
+)
+_OAUTH_STATE_TTL = 600
+
+
+def _check_github_config():
+    """Check if GitHub OAuth is configured."""
+    if not settings.github_client_id or not settings.github_client_secret:
+        raise HTTPException(
+            status_code=501,
+            detail="GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+        )
+    if not _redis_client:
+        raise HTTPException(
+            status_code=503,
+            detail="Redis not configured. GitHub OAuth requires Redis for state management.",
+        )
 
 
 @router.get("/connect")
@@ -40,12 +52,8 @@ async def connect(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Check if GitHub OAuth is configured
-    if not settings.github_client_id or not settings.github_client_secret:
-        raise HTTPException(
-            status_code=501,
-            detail="GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
-        )
+    """Start GitHub OAuth flow."""
+    _check_github_config()
 
     org = (
         db.query(Organization)
@@ -53,9 +61,7 @@ async def connect(
         .first()
     )
     if not org:
-        raise HTTPException(
-            status_code=404, detail="Organization not found for this user"
-        )
+        raise HTTPException(status_code=404, detail="Organization not found")
 
     state = secrets.token_urlsafe(24)
     _redis_client.setex(
@@ -76,6 +82,9 @@ async def connect(
 
 @router.get("/callback")
 async def callback(code: str, state: str, db: Session = Depends(get_db)):
+    """Handle GitHub OAuth callback."""
+    _check_github_config()
+
     raw = _redis_client.get(f"oauth_state:{state}")
     if not raw:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
@@ -131,19 +140,18 @@ async def callback(code: str, state: str, db: Session = Depends(get_db)):
         )
     db.commit()
 
-    return RedirectResponse(
-        f"https://digimarkin.com/dashboard?github=connected&organization_id={organization_id}"
-    )
+    # Redirect to a success page (configurable or default)
+    return RedirectResponse(f"/?github=connected&organization_id={organization_id}")
 
 
 def get_github_token(db: Session, user_id: str, organization_id: str) -> str | None:
     """
-    The actual boundary enforcement: this is the ONLY way any agent gets a
-    GitHub token, and it always requires both user_id AND organization_id to
-    match the row. There is no code path that looks up a token by user_id
-    alone — an agent running for one organization structurally cannot reach
-    another organization's connected account.
+    Get GitHub token for an organization.
+    Returns None if not connected or GitHub OAuth not configured.
     """
+    if not settings.github_client_id:
+        return None
+
     row = (
         db.query(ConnectedAccount)
         .filter_by(user_id=user_id, organization_id=organization_id, provider="github")

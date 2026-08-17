@@ -1,5 +1,6 @@
 """
-Celery worker — the execution engine for the hierarchical agent system.
+Sonic AI — Celery Worker
+The execution engine for the hierarchical agent system.
 Handles task cancellation, timeouts, webhooks, agent overrides, file size limits,
 branch naming, and cost tracking.
 """
@@ -31,7 +32,7 @@ from .webhook import send_webhook
 logger = logging.getLogger(__name__)
 
 celery_app = Celery(
-    "nexus_orchestrator", broker=settings.redis_url, backend=settings.redis_url
+    "sonic_orchestrator", broker=settings.redis_url, backend=settings.redis_url
 )
 celery_app.conf.update(
     task_acks_late=True,
@@ -107,7 +108,7 @@ def _generate_unique_branch_name(task_id: str, existing_branches: list[str]) -> 
     """
     Generate a unique branch name to avoid conflicts with concurrent tasks.
     """
-    base = f"nexus/{task_id[:8]}"
+    base = f"sonic/{task_id[:8]}"
     if base not in existing_branches:
         return base
 
@@ -146,7 +147,7 @@ async def _run_git_worker(
     if not task.repo:
         raise RuntimeError("No repo set on this task — coding agents need one.")
 
-    workdir = tempfile.mkdtemp(prefix="nexus_")
+    workdir = tempfile.mkdtemp(prefix="sonic_")
     try:
         repo_path, branch_existed = clone_repo(
             task.repo, token, workdir, branch=task.branch
@@ -488,9 +489,9 @@ def _on_child_finished(db: Session, child: AgentRun):
                     token,
                     task.branch,
                     base="main",
-                    title=f"Nexus: {task.prompt[:100]}",
+                    title=f"Sonic: {task.prompt[:100]}",
                     body=decision.get(
-                        "summary", "Automated change from the Nexus coding team."
+                        "summary", "Automated change from the Sonic coding team."
                     ),
                 )
             )

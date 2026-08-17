@@ -1,15 +1,6 @@
 """
-Configuration settings. All fields have defaults so the app can start even
-without full configuration — you can add variables incrementally.
-
-For Render deployment:
-- DATABASE_URL: Set in Render's Environment tab (from managed Postgres)
-- REDIS_URL: Set in Render's Environment tab (from managed Redis)
-- LLM_API_KEY: Set in Render's Environment tab
-- Other fields: Add as needed
-
-For Docker Compose deployment:
-- All values come from .env file
+Sonic AI Orchestrator — Configuration
+All fields have sensible defaults. Only LLM_API_KEY is needed to get started.
 """
 
 import logging
@@ -20,56 +11,49 @@ logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    # --- DigiMarkIn hub (JWT verification) ---
-    # These can be empty for testing — auth will be disabled if not set
-    digimarkin_jwks_url: str = ""
-    digimarkin_jwt_issuer: str = ""
-    digimarkin_jwt_audience: str = ""
+    # --- LLM provider ---
+    # Options: anthropic, openai, groq, gemini, openrouter, local
+    llm_provider: str = "groq"
+    llm_api_key: str = ""
+    llm_model: str = "llama-3.3-70b-versatile"
+    llm_base_url: str = ""  # for local: http://localhost:11434/v1
 
-    # --- GitHub OAuth ---
-    # These can be empty — GitHub integration will be disabled if not set
+    # --- Infrastructure ---
+    database_url: str = "sqlite:///./sonic_ai.db"  # SQLite for local/Render free
+    redis_url: str = "redis://localhost:6379/0"
+
+    # --- Auth ---
+    # Simple API key auth. If empty, auth is disabled (for testing).
+    api_key: str = ""
+
+    # --- GitHub (optional — only needed for coding tasks) ---
     github_client_id: str = ""
     github_client_secret: str = ""
     github_redirect_uri: str = ""
 
-    # --- LLM provider ---
-    # Options: anthropic, openai, groq, gemini, openrouter, local
-    llm_provider: str = "groq"
-    llm_api_key: str = ""  # Required for actual LLM calls
-    llm_model: str = "llama-3.3-70b-versatile"  # default for Groq
-    llm_base_url: str = (
-        ""  # required for local provider (e.g., http://localhost:11434/v1)
-    )
-
-    # --- Infrastructure ---
-    # For Render: set DATABASE_URL and REDIS_URL in Environment tab
-    # For Docker: these come from .env with service names (postgres, redis)
-    database_url: str = "postgresql://nexus:nexus@localhost:5432/nexus_orchestrator"
-    redis_url: str = "redis://localhost:6379/0"
-
-    # Token encryption key — auto-generate if not set (for testing only)
-    # In production, set this explicitly and keep it stable across restarts
-    token_encryption_key: str = ""
+    # --- Security ---
+    token_encryption_key: str = ""  # auto-generated if empty
 
     # --- Cost control ---
-    max_llm_calls_per_task: int = 0  # 0 = unlimited
+    max_llm_calls_per_task: int = 0
 
     # --- Rate limiting ---
-    rate_limit_tasks_per_minute: int = 10  # max tasks per user per minute
-    rate_limit_tasks_per_hour: int = 100  # max tasks per user per hour
+    rate_limit_tasks_per_minute: int = 10
+    rate_limit_tasks_per_hour: int = 100
 
     # --- Task timeout ---
-    task_timeout_minutes: int = 30  # auto-fail tasks stuck in "running" for this long
+    task_timeout_minutes: int = 30
 
-    # --- Admin/debug ---
-    admin_secret: str = ""  # if set, enables /admin endpoints with this Bearer token
-    admin_allowed_ips: str = (
-        ""  # comma-separated IPs allowed to access /admin (empty = all)
-    )
+    # --- Admin ---
+    admin_secret: str = ""
+    admin_allowed_ips: str = ""
 
     # --- File size limits ---
-    max_file_size_bytes: int = 1_000_000  # 1MB max per file written by coding agents
-    max_files_per_commit: int = 50  # max files in a single commit
+    max_file_size_bytes: int = 1_000_000
+    max_files_per_commit: int = 50
+
+    # --- CORS ---
+    allowed_origins: str = "*"  # comma-separated origins, or * for all
 
     class Config:
         env_file = ".env"
@@ -77,38 +61,21 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-        # Auto-generate token encryption key if not set (for testing)
         if not self.token_encryption_key:
-            logger.warning(
-                "TOKEN_ENCRYPTION_KEY not set — auto-generating a temporary key. "
-                "This means encrypted tokens (GitHub OAuth) won't survive restarts. "
-                "Set TOKEN_ENCRYPTION_KEY in production!"
-            )
             self.token_encryption_key = Fernet.generate_key().decode()
+        self._validate()
 
-        # Validate critical settings
-        self._validate_settings()
-
-    def _validate_settings(self):
-        """Log warnings for missing optional but recommended settings."""
-        if not self.digimarkin_jwks_url:
-            logger.warning(
-                "DIGIMARKIN_JWKS_URL not set — JWT authentication will fail. "
-                "Set this in production or use a test JWT bypass."
-            )
-
+    def _validate(self):
         if not self.llm_api_key:
             logger.warning(
-                "LLM_API_KEY not set — LLM calls will fail. "
-                "Set this to use any AI provider."
+                "LLM_API_KEY not set — LLM calls will fail until configured."
             )
-
-        if self.llm_provider == "local" and not self.llm_base_url:
+        if not self.api_key:
             logger.warning(
-                "LLM_PROVIDER=local but LLM_BASE_URL not set — "
-                "set LLM_BASE_URL (e.g., http://localhost:11434/v1)"
+                "API_KEY not set — authentication is disabled (open access)."
             )
+        if self.llm_provider == "local" and not self.llm_base_url:
+            logger.warning("LLM_PROVIDER=local but LLM_BASE_URL not set.")
 
 
 settings = Settings()

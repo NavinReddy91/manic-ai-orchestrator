@@ -1,281 +1,400 @@
-# Manic AI — Orchestrator
+# Sonic AI Orchestrator
 
-Manic AI is a hierarchical multi-agent orchestration engine. A Manic Chief Agent (CEO) receives a request, delegates to department heads (Coding, Marketing, Growth, Accounting, Sales, Operations), each of which runs its own team, reviews their work, sends it back for fixes if needed, and reports up. The Coding team clones a real repo, writes real files, commits, pushes, and opens a real GitHub PR.
+**Multi-agent AI orchestration engine with hierarchical task delegation**
 
-Every request is scoped to one **Organization** (a hard boundary) — no agent, token, or task can cross from one organization into another.
+Sonic AI is a standalone, deployable multi-agent system where a Chief Agent delegates tasks to department heads (Coding, Marketing, Growth, Accounting, Sales, Operations), each managing their own team of specialists. The system reviews work, sends it back for fixes if needed, and compiles final reports.
 
-## Architecture
+## 🚀 Quick Start
+
+### Deploy to Render (Free Tier)
+
+1. **Fork this repo** or use directly: `https://github.com/NavinReddy91/sonic-ai-orchestrator`
+
+2. **Go to Render Dashboard** → Blueprints → New Blueprint Instance
+
+3. **Connect your GitHub repo**
+
+4. **Set environment variables** in Render dashboard:
+   ```bash
+   LLM_API_KEY=your_groq_api_key  # Get from https://console.groq.com
+   API_KEY=your_custom_api_key     # Optional: protects your API
+   ```
+
+5. **Deploy!** Render will create:
+   - Web service (API)
+   - Background worker (Celery)
+   - PostgreSQL database
+   - Redis
+
+### Local Development
+
+```bash
+# Clone the repo
+git clone https://github.com/NavinReddy91/sonic-ai-orchestrator.git
+cd sonic-ai-orchestrator
+
+# Create .env file
+cp .env.example .env
+# Edit .env and add your LLM_API_KEY
+
+# Start with Docker Compose
+docker compose up -d
+
+# Or run locally
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+### Test It
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Create an organization
+curl -X POST http://localhost:8000/organizations \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Business"}'
+
+# Create a task
+curl -X POST http://localhost:8000/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "your-org-id",
+    "prompt": "Research the latest AI trends for 2024"
+  }'
+
+# Check task status
+curl http://localhost:8000/tasks/{task_id}
+```
+
+## 🏗️ Architecture
 
 ```
-                         ┌─────────────────────────┐
-                         │   DigiMarkIn Core (hub)  │
-                         │   Laravel, issues RS256  │
-                         │   JWTs, exposes JWKS      │
-                         └────────────┬─────────────┘
-                                      │ JWT in Authorization header
-                                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                 Manic AI Orchestrator (spoke)                    │
-│                                                                  │
-│  Organizations — DigiMarkIn, LFS Loans, BrightEduAid, Nappilos, │
-│                  KwikNap, or any other business you add. Each   │
-│                  one is a hard boundary: its own tasks, its     │
-│                  own connected GitHub token, nothing shared.    │
-│                                                                  │
-│  Per organization, a Task fires this tree:                      │
-│                                                                  │
-│                       Manic Chief Agent                         │
-│        ┌──────────┬──────────┬──────────┬──────────┬─────────┐ │
-│     Coding     Marketing   Growth    Accounting  Sales   Ops   │
-│     (5 agents) (2 agents) (2 agents) (1 agent)  (1 agent)(1)  │
-│                                                                  │
-│  Every leaf agent has live web access (search + fetch real     │
-│  pages). Every manager reviews its team's output and can send  │
-│  work back for a specific fix before reporting up.             │
-└─────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────┐
+                    │   Sonic AI Chief    │
+                    │     (CEO Agent)     │
+                    └──────────┬──────────┘
+                               │
+        ┌──────────┬───────────┼───────────┬──────────┬──────────┐
+        │          │           │           │          │          │
+   ┌────▼────┐ ┌──▼───┐  ┌───▼────┐  ┌───▼────┐ ┌──▼───┐ ┌───▼────┐
+   │ Coding  │ │Mktg  │  │ Growth │  │Account │ │Sales │ │  Ops   │
+   │  Team   │ │ Team │  │  Team  │  │  Team  │ │ Team │ │  Team  │
+   │(5 agents│ │(2)   │  │  (2)   │  │  (1)   │ │ (1)  │ │  (1)   │
+   └─────────┘ └──────┘  └────────┘  └────────┘ └──────┘ └────────┘
 ```
 
-## Tech Stack
+### Agent Teams
 
-- **Backend:** FastAPI + Celery + Redis + PostgreSQL
-- **LLM:** Multi-provider (Groq, Gemini, OpenAI, Anthropic, OpenRouter)
-- **Auth:** RS256 JWT verification against DigiMarkIn's JWKS (trustless spoke)
-- **Migrations:** Alembic
-- **Deploy:** Docker Compose or systemd
+- **Coding Team** (5 agents) — Frontend Dev, Backend Dev, Bug Checkers, Integration Checker
+  - Sequential execution (frontend → backend → bug checks → integration)
+  - Can clone repos, write code, commit, push, and open PRs
+  - Requires GitHub OAuth integration
 
-## Features
+- **Marketing Team** (2 agents) — Traditional Marketing, Digital Marketing
+  - Parallel execution
+  - Can search the web for research
 
-### Core Features
-- **Hierarchical agent system** — CEO → 6 department heads → 10 leaf workers
-- **Real git operations** — clone, branch, write files, commit, push, open PR
-- **Live web access** — DuckDuckGo search + page fetch for all leaf agents
-- **Organization boundary enforcement** — hard isolation between businesses
-- **Multi-provider LLM** — switch between Groq, Gemini, OpenAI, Anthropic, or OpenRouter
+- **Growth Team** (2 agents) — Market Researcher, Business Analyst
+  - Parallel execution
+  - Can search the web for research
 
-### Production Hardening
-- **Task cancellation** — cancel running tasks via `DELETE /tasks/{id}`
-- **Task timeouts** — auto-fail tasks stuck in "running" for too long (configurable)
-- **Webhook callbacks** — POST task results to a URL when tasks complete
-- **Rate limiting** — per-user limits on task creation (per-minute and per-hour)
-- **Error recovery** — background job detects and fails stale tasks
-- **Admin/debug endpoints** — view all tasks, stats, audit logs without JWT
-- **Audit logging** — track who created/cancelled tasks, when, from which IP
-- **Task templates** — save and reuse common prompts
-- **Agent customization** — per-organization overrides for agent system prompts
-- **File size limits** — prevent coding agents from writing huge files
-- **Branch naming conflicts** — unique branch names for concurrent tasks
-- **Task prioritization** — normal, high, or urgent priority levels
-- **Cost tracking** — track LLM call count and estimated token usage per task
-- **Race condition fix** — atomic DB guard prevents double-triggering of manager review
-- **Redis-backed OAuth state** — works across multiple API workers
-- **Path traversal protection** — rejects file paths outside repo directory
-- **Celery retries** — automatic retry with backoff on transient failures
-- **Structured JSON logging** — all modules emit JSON-formatted logs
-- **Connection pooling** — SQLAlchemy configured for production
+- **Accounting Team** (1 agent) — Bookkeeper
+  - Invoicing, expense tracking, filing prep
 
-## LLM Providers
+- **Sales Team** (1 agent) — Sales Rep
+  - Lead follow-up, proposals, outreach
 
-Set `LLM_PROVIDER` in `.env`:
+- **Operations Team** (1 agent) — Ops Coordinator
+  - Deadlines, vendor status, rollups
+
+## 🤖 LLM Providers
+
+Sonic AI supports multiple LLM backends. Set `LLM_PROVIDER` in `.env`:
 
 | Provider | `LLM_PROVIDER` | Example `LLM_MODEL` | Notes |
-|---|---|---|---|
-| **Local (Ollama)** | `local` | `qwen2.5:3b` | Self-hosted, free, private |
-| **Local (vLLM)** | `local` | `Qwen/Qwen2.5-3B-Instruct` | Self-hosted, high performance |
-| **Groq** | `groq` | `llama-3.3-70b-versatile` | Fast, cheap, good for testing |
-| **Google Gemini** | `gemini` | `gemini-2.0-flash` | Good balance of speed/quality |
-| **OpenAI** | `openai` | `gpt-4o` | High quality, higher cost |
-| **Anthropic** | `anthropic` | `claude-sonnet-4-6` | High quality, higher cost |
-| **OpenRouter** | `openrouter` | `anthropic/claude-3.5-sonnet` | Access to many models via one API |
+|----------|----------------|---------------------|-------|
+| **Groq** | `groq` | `llama-3.3-70b-versatile` | Fast, cheap, free tier |
+| **Google Gemini** | `gemini` | `gemini-2.0-flash` | Good balance |
+| **OpenAI** | `openai` | `gpt-4o` | High quality |
+| **Anthropic** | `anthropic` | `claude-sonnet-4-6` | High quality |
+| **OpenRouter** | `openrouter` | `anthropic/claude-3.5-sonnet` | Many models |
+| **Local (Ollama)** | `local` | `qwen2.5:3b` | Self-hosted, free |
 
-### Using Local Models (Ollama, vLLM, etc.)
+### Using Local Models (Ollama)
 
-For self-hosted models, set:
-```bash
-LLM_PROVIDER=local
-LLM_BASE_URL=http://localhost:11434/v1  # Ollama default
-LLM_MODEL=qwen2.5:3b
-LLM_API_KEY=  # leave empty or set to any value
-```
-
-**Ollama setup:**
 ```bash
 # Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Pull and run Qwen 2.5 3B
+# Pull a model
 ollama pull qwen2.5:3b
-ollama serve  # starts on http://localhost:11434
+
+# Configure Sonic AI
+LLM_PROVIDER=local
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=qwen2.5:3b
+LLM_API_KEY=  # Leave empty for local
 ```
 
-**Recommendation for testing:** Start with your local Qwen 2.5 3B (free, private) or Groq (fast, cheap). Switch to Gemini or GPT-4o for production when you need higher quality.
+## 🔐 Authentication
 
-## The Org Chart
+### No Auth (Development)
+Leave `API_KEY` empty in `.env` — all endpoints are open.
 
-- **Manic Coding** — Frontend Dev, Backend Dev, Frontend Bug Checker, Backend Bug Checker, Integration Checker. Run sequentially, all building on the same pushed branch. Opens a real PR on approval.
-- **Manic Marketing** — Traditional + Digital (content folds into whichever fits).
-- **Manic Growth** — Market Researcher + Business Analyst.
-- **Manic Accounting** — Bookkeeper (invoicing, expense tracking, filing-prep summaries).
-- **Manic Sales** — Sales Rep (lead follow-up, proposals, outreach).
-- **Manic Operations** — Ops Coordinator (deadlines, vendor status, rollups).
-
-The Chief Agent only delegates to the teams a given request actually needs.
-
-## Deployment Guide
-
-### Option 1: Docker Compose (Recommended)
-
+### API Key Auth (Production)
+Set `API_KEY` in `.env`:
 ```bash
-cp .env.example .env   # fill in real values
-docker compose up -d --build   # brings up Postgres, Redis, API, and worker
+API_KEY=your-secret-key-here
 ```
 
-This runs 4 services:
-- `postgres` — PostgreSQL database
-- `redis` — Redis for Celery task queue
-- `api` — FastAPI web server (port 8010)
-- `worker` — Celery worker (processes agent tasks)
-
-### Option 2: Systemd (No Docker)
-
-See `deploy/systemd-units.txt` for two long-running services.
-
-### Where to Deploy
-
-| Option | Cost | Best For |
-|---|---|---|
-| **Same VPS as DigiMarkIn** | $0 extra | If your Laravel server has 2GB+ free RAM |
-| **Cheap VPS** | $5-12/mo | Dedicated server (Hetzner €4/mo, DigitalOcean $6/mo) |
-| **Render (paid)** | ~$25-40/mo | Managed hosting, but pricey for Celery |
-| **Render (free)** | $0 | **Not viable** — no persistent Redis/Postgres, workers spin down |
-
-**Recommendation:** Deploy on the same VPS as DigiMarkIn (if resources allow) or get a cheap VPS with 2GB+ RAM.
-
-### Integrating with DigiMarkIn (Laravel)
-
-**Do NOT embed this inside Laravel.** They are different languages and runtimes. The hub-and-spoke design is correct:
-
-1. **DigiMarkIn (Laravel)** — Your admin panel, user login, dashboard
-2. **Manic AI Orchestrator (Python)** — Agent execution, git operations, LLM calls
-
-**How they communicate:**
-- Laravel admin panel has a "Manic AI" page
-- User types a prompt, clicks send
-- Laravel backend sends `POST https://your-orchestrator-url/tasks` with the JWT
-- Orchestrator processes in background, returns task ID
-- Laravel polls `GET /tasks/{id}` to show progress
-- When done, Laravel displays the final report
-
-**Or use webhooks:**
-- Pass `callback_url` when creating a task
-- Orchestrator POSTs the result to that URL when the task completes
-- No polling needed
-
-**CORS:** Update `app/main.py` to allow your DigiMarkIn domain:
-```python
-allow_origins=["https://digimarkin.com", "https://admin.digimarkin.com"]
+Then include in requests:
+```bash
+curl -H "X-API-Key: your-secret-key-here" http://localhost:8000/tasks
 ```
 
-## Environment Variables
-
-See `.env.example` for all required variables:
-
-| Variable | Purpose |
-|---|---|
-| `DIGIMARKIN_JWKS_URL` | DigiMarkIn Core's JWKS endpoint |
-| `DIGIMARKIN_JWT_ISSUER` | JWT issuer claim |
-| `DIGIMARKIN_JWT_AUDIENCE` | JWT audience claim |
-| `GITHUB_CLIENT_ID` | GitHub OAuth App client ID |
-| `GITHUB_CLIENT_SECRET` | GitHub OAuth App client secret |
-| `GITHUB_REDIRECT_URI` | OAuth callback URL |
-| `LLM_PROVIDER` | LLM provider (groq, gemini, openai, anthropic, openrouter) |
-| `LLM_API_KEY` | API key for the chosen provider |
-| `LLM_MODEL` | Model name (e.g., llama-3.3-70b-versatile) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `TOKEN_ENCRYPTION_KEY` | Fernet key for encrypting stored tokens |
-| `MAX_LLM_CALLS_PER_TASK` | Cost control: max LLM calls per task (0 = unlimited) |
-| `RATE_LIMIT_TASKS_PER_MINUTE` | Max tasks per user per minute |
-| `RATE_LIMIT_TASKS_PER_HOUR` | Max tasks per user per hour |
-| `TASK_TIMEOUT_MINUTES` | Auto-fail tasks stuck in "running" for this long |
-| `ADMIN_SECRET` | Bearer token for /admin endpoints |
-| `ADMIN_ALLOWED_IPS` | Comma-separated IPs allowed to access /admin |
-| `MAX_FILE_SIZE_BYTES` | Max file size for coding agents (default 1MB) |
-| `MAX_FILES_PER_COMMIT` | Max files in a single commit (default 50) |
-
-## API Endpoints
+## 📡 API Endpoints
 
 ### Tasks
-| Method | Path | Description |
-|---|---|---|
-| POST | `/tasks` | Create task (with optional `callback_url`, `priority`) |
-| GET | `/tasks/{id}` | Get task with full agent execution tree |
-| GET | `/tasks` | List tasks (optional `?organization_id=` and `?status=` filters) |
-| DELETE | `/tasks/{id}` | Cancel a running task |
+- `POST /tasks` — Create a new task
+- `GET /tasks/{id}` — Get task status and results
+- `GET /tasks` — List all tasks
+- `DELETE /tasks/{id}` — Cancel a running task
 
 ### Organizations
-| Method | Path | Description |
-|---|---|---|
-| POST | `/organizations` | Create organization |
-| GET | `/organizations` | List organizations for authenticated user |
+- `POST /organizations` — Create an organization
+- `GET /organizations` — List organizations
 
 ### Task Templates
-| Method | Path | Description |
-|---|---|---|
-| POST | `/task-templates` | Create a task template |
-| GET | `/task-templates` | List templates (optional `?organization_id=` filter) |
-| GET | `/task-templates/{id}` | Get a specific template |
-| PUT | `/task-templates/{id}` | Update a template |
-| DELETE | `/task-templates/{id}` | Delete a template |
+- `POST /task-templates` — Save a task template
+- `GET /task-templates` — List templates
+- `PUT /task-templates/{id}` — Update template
+- `DELETE /task-templates/{id}` — Delete template
 
-### GitHub Integration
-| Method | Path | Description |
-|---|---|---|
-| GET | `/integrations/github/connect` | Start GitHub OAuth flow |
-| GET | `/integrations/github/callback` | OAuth callback |
+### GitHub Integration (Optional)
+- `GET /integrations/github/connect` — Start OAuth flow
+- `GET /integrations/github/callback` — OAuth callback
 
-### Admin (requires `ADMIN_SECRET` or IP whitelist)
-| Method | Path | Description |
-|---|---|---|
-| GET | `/admin/tasks` | List all tasks across all organizations |
-| GET | `/admin/tasks/stale` | List tasks stuck in "running" for too long |
-| GET | `/admin/stats` | System-wide statistics |
-| GET | `/admin/audit` | Audit logs with filters |
+### Admin (Optional)
+- `GET /admin/tasks` — List all tasks (requires `ADMIN_SECRET`)
+- `GET /admin/tasks/stale` — Find stuck tasks
+- `GET /admin/stats` — System statistics
+- `GET /admin/audit` — Audit logs
 
 ### Health
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Health check |
+- `GET /health` — Health check
+- `GET /` — API info
 
-All endpoints except `/health` and `/admin/*` require a valid DigiMarkIn JWT in the `Authorization: Bearer` header.
+## 🎯 Features
 
-## Database Migrations
+### Core Features
+- ✅ **Hierarchical agent system** — CEO → 6 department heads → 10 leaf workers
+- ✅ **Multi-provider LLM** — Groq, Gemini, OpenAI, Anthropic, OpenRouter, or local
+- ✅ **Live web access** — DuckDuckGo search + page fetch for research
+- ✅ **Organization boundaries** — Hard isolation between businesses
+- ✅ **Real git operations** — Clone, branch, write, commit, push, open PRs
+
+### Production Features
+- ✅ **Task cancellation** — Cancel running tasks
+- ✅ **Task timeouts** — Auto-fail stuck tasks
+- ✅ **Webhook callbacks** — POST results to your URL
+- ✅ **Rate limiting** — Per-user limits
+- ✅ **Audit logging** — Track all actions
+- ✅ **Task templates** — Save and reuse prompts
+- ✅ **Agent customization** — Per-org prompt overrides
+- ✅ **Cost tracking** — LLM call count + token estimates
+- ✅ **File size limits** — Prevent huge files
+- ✅ **Race condition protection** — Atomic DB guards
+
+## 📦 Deployment Options
+
+### Render (Recommended for Testing)
+- Free tier available
+- Managed PostgreSQL + Redis
+- Automatic HTTPS
+- See `RENDER_DEPLOYMENT.md` for details
+
+### Docker Compose (VPS/Self-Hosted)
+```bash
+docker compose up -d
+```
+- Full control
+- Use your own PostgreSQL/Redis or built-in
+- Connect to local LLM (Ollama)
+
+### Manual Deployment
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+celery -A app.worker.celery_app worker --loglevel=info
+```
+
+## 🔧 Configuration
+
+See `.env.example` for all options. Key settings:
 
 ```bash
-# After initial setup:
-alembic upgrade head
+# Required
+LLM_API_KEY=your-api-key
 
-# After making model changes:
+# Optional
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.3-70b-versatile
+API_KEY=your-secret-key
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+ADMIN_SECRET=your-admin-secret
+```
+
+## 🧪 Testing
+
+### Test with Groq (Free)
+1. Get API key from https://console.groq.com
+2. Set `LLM_PROVIDER=groq` and `LLM_API_KEY=...`
+3. Create a task — should complete in seconds
+
+### Test with Local Model
+1. Install Ollama: `curl -fsSL https://ollama.com/install.sh | sh`
+2. Pull model: `ollama pull qwen2.5:3b`
+3. Set `LLM_PROVIDER=local` and `LLM_BASE_URL=http://localhost:11434/v1`
+4. Create a task — works offline!
+
+### Test Coding Tasks
+1. Set up GitHub OAuth (see GitHub Integration below)
+2. Connect a repo: `GET /integrations/github/connect?organization_id=...`
+3. Create a coding task:
+   ```json
+   {
+     "organization_id": "...",
+     "prompt": "Add a README file with project description",
+     "repo": "username/repo"
+   }
+   ```
+
+## 🔗 GitHub Integration (Optional)
+
+For coding tasks, connect GitHub:
+
+1. **Create GitHub OAuth App** at https://github.com/settings/developers
+   - Homepage URL: `http://localhost:8000`
+   - Callback URL: `http://localhost:8000/integrations/github/callback`
+
+2. **Set environment variables**:
+   ```bash
+   GITHUB_CLIENT_ID=your-client-id
+   GITHUB_CLIENT_SECRET=your-client-secret
+   GITHUB_REDIRECT_URI=http://localhost:8000/integrations/github/callback
+   ```
+
+3. **Connect a repo**:
+   ```bash
+   curl "http://localhost:8000/integrations/github/connect?organization_id=YOUR_ORG_ID"
+   ```
+
+## 📊 Monitoring
+
+### Check Logs
+```bash
+# Docker Compose
+docker compose logs -f api
+docker compose logs -f worker
+
+# Render
+# View logs in Render dashboard
+```
+
+### Admin Endpoints
+Set `ADMIN_SECRET` and access:
+- `/admin/tasks` — All tasks
+- `/admin/tasks/stale` — Stuck tasks
+- `/admin/stats` — Statistics
+- `/admin/audit` — Audit logs
+
+## 🛠️ Development
+
+### Project Structure
+```
+sonic-ai-orchestrator/
+├── app/
+│   ├── main.py              # FastAPI app
+│   ├── config.py            # Settings
+│   ├── models.py            # Database models
+│   ├── auth.py              # Authentication
+│   ├── db.py                # Database setup
+│   ├── worker.py            # Celery worker (core engine)
+│   ├── llm.py               # LLM provider abstraction
+│   ├── org_chart.py         # Agent hierarchy
+│   ├── tasks_api.py         # Task endpoints
+│   ├── organizations_api.py # Organization endpoints
+│   ├── github_oauth.py      # GitHub integration
+│   ├── admin_api.py         # Admin endpoints
+│   ├── task_templates_api.py# Template endpoints
+│   ├── rate_limiter.py      # Rate limiting
+│   ├── audit.py             # Audit logging
+│   ├── webhook.py           # Webhook callbacks
+│   ├── task_timeout.py      # Stale task cleanup
+│   ├── git_ops.py           # Git operations
+│   ├── web_tools.py         # Web search/fetch
+│   └── logging_config.py    # Logging setup
+├── alembic/                 # Database migrations
+├── docker-compose.yml       # Docker setup
+├── render.yaml              # Render blueprint
+├── requirements.txt         # Python dependencies
+└── .env.example             # Environment template
+```
+
+### Run Tests
+```bash
+pytest tests/
+```
+
+### Database Migrations
+```bash
+# Create migration
 alembic revision --autogenerate -m "description"
+
+# Apply migrations
 alembic upgrade head
 ```
 
-## Testing Locally
+## 💡 Use Cases
 
-1. Copy `.env.example` to `.env` and fill in values
-2. Get a Groq API key from https://console.groq.com (free tier available)
-3. Run `docker compose up -d --build`
-4. Test health: `curl http://localhost:8010/health`
-5. Create a task via API (requires a valid JWT or temporarily disable auth for testing)
+1. **Content Creation** — "Write a blog post about AI trends"
+2. **Market Research** — "Research competitors in the CRM space"
+3. **Code Development** — "Add user authentication to my app"
+4. **Marketing Strategy** — "Create a social media campaign"
+5. **Business Analysis** — "Analyze our Q4 sales data"
+6. **Operations** — "Track vendor deadlines for next month"
 
-## Next Steps
+## 🤝 Contributing
 
-- [ ] Set up DigiMarkIn's JWKS endpoint (if not already done)
-- [ ] Create GitHub OAuth App at https://github.com/settings/developers
-- [ ] Deploy orchestrator to VPS
-- [ ] Add "Manic AI" page to DigiMarkIn admin panel
-- [ ] Test with a simple non-coding task (marketing or research)
-- [ ] Test with a coding task against a throwaway test repo
-- [ ] Verify organization boundary isolation
-- [ ] Switch to production LLM provider (Gemini or GPT-4o)
-- [ ] Configure webhooks for real-time task completion notifications
-- [ ] Set up admin endpoints for monitoring and debugging
+Contributions welcome! Please:
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## 📄 License
+
+MIT License — see LICENSE file for details
+
+## 🆘 Support
+
+- **Documentation**: See `RENDER_DEPLOYMENT.md` and `QUICK_START.md`
+- **Issues**: https://github.com/NavinReddy91/sonic-ai-orchestrator/issues
+- **Email**: support@sonic-ai.com
+
+## 🎉 Credits
+
+Built with:
+- FastAPI — Web framework
+- Celery — Task queue
+- SQLAlchemy — ORM
+- Redis — Message broker
+- PostgreSQL / SQLite — Database
+- Anthropic / OpenAI / Groq / Google — LLM providers
+
+---
+
+**Ready to deploy?** Check out [RENDER_DEPLOYMENT.md](RENDER_DEPLOYMENT.md) for step-by-step instructions.

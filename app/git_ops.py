@@ -78,9 +78,9 @@ def commit_and_push(
         [
             "git",
             "-c",
-            "user.email=nexus-agent@digimarkin.com",
+            "user.email=agent@sonic-ai.com",
             "-c",
-            "user.name=Nexus Agent",
+            "user.name=Sonic Agent",
             "commit",
             "-m",
             message,
