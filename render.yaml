@@ -1,8 +1,12 @@
 # Manic AI Orchestrator — Render Blueprint
 # Deploy this project to Render with one click
+# 
+# DATABASE: Set DATABASE_URL in Render dashboard
+# - For NeonDB (recommended free tier): postgresql://user:pass@host/dbname?sslmode=require
+# - For SQLite (local dev only): sqlite:///./manic_ai.db
 
 services:
-  # Web service (FastAPI)
+  # Web service (FastAPI) - Single process handles API + background tasks
   - type: web
     name: manic-ai-api
     env: python
@@ -12,73 +16,19 @@ services:
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.0"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: manic-ai-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: manic-ai-redis
-          property: connectionString
       - key: LLM_PROVIDER
         value: groq
       - key: LLM_API_KEY
-        sync: false  # Set this in Render dashboard
+        sync: false  # REQUIRED: Set this in Render dashboard
       - key: LLM_MODEL
         value: llama-3.3-70b-versatile
+      - key: DATABASE_URL
+        sync: false  # REQUIRED: Set your NeonDB connection string in Render dashboard
       - key: API_KEY
-        sync: false  # Set this in Render dashboard (or leave empty for no auth)
+        sync: false  # Optional: Set this in Render dashboard (or leave empty for no auth)
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
       - key: ADMIN_SECRET
         generateValue: true
       - key: ALLOWED_ORIGINS
         value: "*"
-
-  # Background worker (Celery)
-  - type: worker
-    name: manic-ai-worker
-    env: python
-    region: oregon
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.0"
-      - key: DATABASE_URL
-        fromDatabase:
-          name: manic-ai-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: manic-ai-redis
-          property: connectionString
-      - key: LLM_PROVIDER
-        value: groq
-      - key: LLM_API_KEY
-        sync: false  # Set this in Render dashboard
-      - key: LLM_MODEL
-        value: llama-3.3-70b-versatile
-      - key: TOKEN_ENCRYPTION_KEY
-        generateValue: true
-
-  # Redis for Celery
-  - type: redis
-    name: manic-ai-redis
-    region: oregon
-    plan: free
-    maxmemoryPolicy: noeviction
-    ipAllowList: []
-
-databases:
-  # PostgreSQL database
-  - name: manic-ai-db
-    region: oregon
-    plan: free
-    databaseName: manic_ai
-    user: manic_ai

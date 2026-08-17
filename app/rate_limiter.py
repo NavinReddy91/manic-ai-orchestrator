@@ -1,13 +1,18 @@
 """
 Rate limiting for task creation. Uses Redis to track per-user request counts
-with sliding windows.
+with sliding windows. Falls back to no rate limiting if Redis is not available.
 """
 
 import time
 import logging
-import redis
 from fastapi import HTTPException, Request
 from .config import settings
+
+# Optional redis import
+try:
+    import redis
+except ImportError:
+    redis = None
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +23,8 @@ _redis_client = None
 def _get_redis():
     """Lazy Redis initialization."""
     global _redis_client
+    if redis is None:
+        return None
     if _redis_client is None and settings.redis_url:
         try:
             _redis_client = redis.Redis.from_url(

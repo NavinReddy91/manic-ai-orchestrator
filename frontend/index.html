@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manic AI — Multi-Agent Orchestrator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="scanline"></div>
+    
+    <header class="command-center">
+        <div class="logo">
+            <div class="logo-icon">
+                <div class="pulse-ring"></div>
+                <div class="core"></div>
+            </div>
+            <h1>MANIC AI</h1>
+            <span class="version">v1.0</span>
+        </div>
+        <nav class="status-bar">
+            <div class="status-item">
+                <span class="status-dot online"></span>
+                <span>SYSTEM ONLINE</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">AGENTS:</span>
+                <span id="agent-count">17</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">TASKS:</span>
+                <span id="task-count">0</span>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dashboard">
+        <section class="agent-grid">
+            <h2 class="section-title">
+                <span class="title-icon">◈</span>
+                AGENT HIERARCHY
+                <span class="title-icon">◈</span>
+            </h2>
+            <div class="org-chart" id="org-chart">
+                <!-- Agent nodes will be rendered here -->
+            </div>
+        </section>
+
+        <section class="task-panel">
+            <h2 class="section-title">
+                <span class="title-icon">▶</span>
+                MISSION CONTROL
+                <span class="title-icon">▶</span>
+            </h2>
+            
+            <div class="task-input-container">
+                <div class="input-header">
+                    <label for="task-prompt">DEPLOY NEW MISSION</label>
+                    <div class="org-selector">
+                        <label>ORG:</label>
+                        <select id="org-select">
+                            <option value="">Select Organization</option>
+                        </select>
+                    </div>
+                </div>
+                <textarea 
+                    id="task-prompt" 
+                    placeholder="Enter your mission briefing... (e.g., 'Research AI trends and create a strategy document')"
+                    rows="4"
+                ></textarea>
+                <div class="task-options">
+                    <div class="option-group">
+                        <label>Priority:</label>
+                        <select id="task-priority">
+                            <option value="0">Normal</option>
+                            <option value="1">High</option>
+                            <option value="2">Urgent</option>
+                        </select>
+                    </div>
+                    <div class="option-group">
+                        <label>Repo (optional):</label>
+                        <input type="text" id="task-repo" placeholder="owner/repo">
+                    </div>
+                </div>
+                <button id="deploy-task" class="deploy-btn">
+                    <span class="btn-icon">⚡</span>
+                    DEPLOY MISSION
+                </button>
+            </div>
+
+            <div class="task-list">
+                <h3>ACTIVE MISSIONS</h3>
+                <div id="task-list-container">
+                    <div class="empty-state">
+                        <div class="empty-icon">◇</div>
+                        <p>No active missions</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="task-detail" id="task-detail" style="display: none;">
+            <h2 class="section-title">
+                <span class="title-icon">◉</span>
+                MISSION STATUS
+                <span class="title-icon">◉</span>
+            </h2>
+            <div id="task-detail-content">
+                <!-- Task details will be rendered here -->
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="footer-content">
+            <span>MANIC AI ORCHESTRATOR</span>
+            <span class="separator">|</span>
+            <span>HIERARCHICAL MULTI-AGENT SYSTEM</span>
+            <span class="separator">|</span>
+            <a href="/docs" target="_blank">API DOCS</a>
+        </div>
+    </footer>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

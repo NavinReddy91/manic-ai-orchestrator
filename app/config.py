@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # --- Infrastructure ---
     database_url: str = "sqlite:///./manic_ai.db"  # SQLite for local/Render free
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = ""  # Optional: only needed for Celery worker deployment
 
     # --- Auth ---
     # Simple API key auth. If empty, auth is disabled (for testing).

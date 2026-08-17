@@ -7,7 +7,6 @@ import json
 import secrets
 import httpx
 import logging
-import redis
 from cryptography.fernet import Fernet
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -17,6 +16,12 @@ from .config import settings
 from .auth import get_current_user
 from .models import ConnectedAccount, Organization
 from .db import get_db
+
+# Optional redis import - only needed for GitHub OAuth state management
+try:
+    import redis
+except ImportError:
+    redis = None
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +44,8 @@ def _get_fernet():
 def _get_redis():
     """Lazy Redis initialization."""
     global _redis_client
+    if redis is None:
+        return None
     if _redis_client is None and settings.redis_url:
         _redis_client = redis.Redis.from_url(settings.redis_url, decode_responses=True)
     return _redis_client

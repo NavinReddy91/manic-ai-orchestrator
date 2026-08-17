@@ -3,9 +3,10 @@ Manic AI — Tasks API
 Create, list, get, and cancel tasks.
 """
 
+import asyncio
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,7 @@ from .auth import get_current_user
 from .db import get_db
 from .models import Task, AgentRun, Organization
 from .org_chart import ORG_CHART, ROOT_AGENT
-from .worker import run_agent_node, celery_app
+from .background_worker import start_task_execution
 from .rate_limiter import check_rate_limit
 from .audit import log_action
 
@@ -33,6 +34,7 @@ class CreateTaskRequest(BaseModel):
 async def create_task(
     body: CreateTaskRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -59,23 +61,11 @@ async def create_task(
         repo=body.repo,
         callback_url=body.callback_url,
         priority=body.priority,
-        status="running",
+        status="planning",
     )
     db.add(task)
     db.commit()
     db.refresh(task)
-
-    # Create CEO agent run
-    ceo_run = AgentRun(
-        task_id=task.id,
-        parent_id=None,
-        agent_key=ROOT_AGENT,
-        instructions=body.prompt,
-        status="pending",
-    )
-    db.add(ceo_run)
-    db.commit()
-    db.refresh(ceo_run)
 
     # Log the action
     client_ip = request.client.host if request.client else None
@@ -93,8 +83,8 @@ async def create_task(
         ip_address=client_ip,
     )
 
-    # Fire the agent tree
-    run_agent_node.delay(ceo_run.id)
+    # Start task execution in background
+    background_tasks.add_task(_run_task_background, task.id, user["sub"])
 
     logger.info(f"Task created: {task.id} for org {org.id}")
 
@@ -237,3 +227,8 @@ def _serialize_task(db: Session, task: Task) -> dict:
         "cancelled_at": task.cancelled_at.isoformat() if task.cancelled_at else None,
         "org_tree": _serialize_node(db, root) if root else None,
     }
+
+
+async def _run_task_background(task_id: str, user_id: str):
+    """Wrapper to run the async task execution."""
+    await start_task_execution(task_id, user_id)
