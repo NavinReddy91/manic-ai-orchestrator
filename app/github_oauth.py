@@ -40,6 +40,13 @@ async def connect(
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Check if GitHub OAuth is configured
+    if not settings.github_client_id or not settings.github_client_secret:
+        raise HTTPException(
+            status_code=501,
+            detail="GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.",
+        )
+
     org = (
         db.query(Organization)
         .filter_by(id=organization_id, user_id=user["sub"])

@@ -1,0 +1,80 @@
+# Render Blueprint - Manic AI Orchestrator
+# This file defines the services needed to deploy on Render
+# See: https://render.com/docs/blueprint-spec
+
+services:
+  # Web service (FastAPI)
+  - type: web
+    name: manic-ai-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: manic-ai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: manic-ai-redis
+          property: connectionString
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+      - key: ADMIN_SECRET
+        generateValue: true
+      # Optional: Set these in Render dashboard
+      - key: DIGIMARKIN_JWKS_URL
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+
+  # Background worker (Celery)
+  - type: worker
+    name: manic-ai-worker
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: manic-ai-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: manic-ai-redis
+          property: connectionString
+      - key: LLM_PROVIDER
+        value: groq
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile
+      - key: TOKEN_ENCRYPTION_KEY
+        generateValue: true
+
+  # Redis for Celery
+  - type: redis
+    name: manic-ai-redis
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+
+databases:
+  # PostgreSQL database
+  - name: manic-ai-db
+    databaseName: manic_ai
+    user: manic_ai
+    plan: starter
