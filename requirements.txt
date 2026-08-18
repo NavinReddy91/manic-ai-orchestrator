@@ -9,7 +9,7 @@ cryptography==43.0.1
 python-dotenv==1.0.1
 beautifulsoup4==4.12.3
 alembic==1.13.2
-psycopg2-binary==2.9.9
+psycopg2-binary>=2.9.9
 celery==5.4.0
 redis==5.0.8
 weasyprint==62.3
