@@ -94,9 +94,8 @@ def _get_engine():
         return _engine
     except Exception as e:
         logger.error(f"PostgreSQL connection failed: {e}")
-        logger.warning("Falling back to local SQLite database: sqlite:///./manic_ai.db")
-        _engine = _create_sqlite_engine("sqlite:///./manic_ai.db")
-        return _engine
+        logger.error("Check your DATABASE_URL environment variable")
+        raise
 
 
 def get_session_local():
@@ -126,15 +125,7 @@ def init_db():
         _db_initialized = True
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
-        try:
-            logger.warning("Retrying database initialization with SQLite fallback...")
-            sqlite_engine = _create_sqlite_engine("sqlite:///./manic_ai.db")
-            Base.metadata.create_all(bind=sqlite_engine)
-            global _engine
-            _engine = sqlite_engine
-            _db_initialized = True
-        except Exception as sq_err:
-            logger.error(f"SQLite fallback initialization failed: {sq_err}")
+        raise
 
 
 def get_db():
