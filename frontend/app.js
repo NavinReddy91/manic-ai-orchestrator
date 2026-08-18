@@ -246,8 +246,15 @@ async function showTaskDetail(taskId) {
         const task = await response.json();
         renderTaskDetail(task);
         
-        document.getElementById('task-detail').style.display = 'block';
-        document.getElementById('task-detail').scrollIntoView({ behavior: 'smooth' });
+        const detailElem = document.getElementById('task-detail');
+        if (detailElem) {
+            detailElem.style.display = 'block';
+            try {
+                detailElem.scrollIntoView({ behavior: 'smooth' });
+            } catch (e) {
+                detailElem.scrollIntoView();
+            }
+        }
     } catch (error) {
         console.error('Error loading task detail:', error);
         showNotification('Failed to load task details', 'error');
