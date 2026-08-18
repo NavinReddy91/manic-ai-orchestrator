@@ -1,13 +1,8 @@
 # Manic AI Orchestrator — Dockerfile
 FROM python:3.12-slim
 
-# Install git (required for coding agents) and Pango/Cairo (required for WeasyPrint PDF generation)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    libpango1.0-0 \
-    libpangoft2-1.0-0 \
-    shared-mime-info \
-    && rm -rf /var/lib/apt/lists/*
+# Install git (required for coding agents)
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
