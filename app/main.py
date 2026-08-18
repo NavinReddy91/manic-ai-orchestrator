@@ -36,6 +36,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from fastapi import Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal Server Error: {str(exc)}"}
+    )
+
 # CORS configuration
 from .config import settings
 
