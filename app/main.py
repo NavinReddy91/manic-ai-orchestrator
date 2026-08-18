@@ -6,10 +6,10 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from .db import init_db
 from .github_oauth import router as github_router
@@ -36,16 +36,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled exception on {request.method} {request.url.path}: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal Server Error: {str(exc)}"}
+    logger.exception(
+        f"Unhandled exception on {request.method} {request.url.path}: {exc}"
     )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 
 # CORS configuration
 from .config import settings
@@ -59,7 +57,7 @@ origins = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=origins != ["*"],  # credentials not allowed with wildcard
     allow_methods=["*"],
     allow_headers=["*"],
 )

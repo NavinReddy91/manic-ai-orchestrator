@@ -56,7 +56,11 @@ async def _call_anthropic(system: str, user_message: str, max_tokens: int) -> st
 
 
 async def _call_openai_compatible(
-    system: str, user_message: str, max_tokens: int, base_url: str, model_override: str | None = None
+    system: str,
+    user_message: str,
+    max_tokens: int,
+    base_url: str,
+    model_override: str | None = None,
 ) -> str:
     """Works for OpenAI, Groq, OpenRouter, and any OpenAI-compatible API."""
     model = model_override or settings.llm_model
@@ -83,9 +87,17 @@ async def _call_openai_compatible(
                 err_detail = err_json.get("error", {}).get("message", resp.text)
             except Exception:
                 err_detail = resp.text
-            raise RuntimeError(f"LLM API Error ({resp.status_code}) for model '{model}': {err_detail}")
+            raise RuntimeError(
+                f"LLM API Error ({resp.status_code}) for model '{model}': {err_detail}"
+            )
         data = resp.json()
-        return data["choices"][0]["message"]["content"]
+        choices = data.get("choices", [])
+        if not choices or not choices[0].get("message"):
+            raise RuntimeError(f"LLM returned empty choices for model '{model}'")
+        content = choices[0]["message"].get("content")
+        if content is None:
+            raise RuntimeError(f"LLM returned null content for model '{model}'")
+        return content
 
 
 async def _call_openai(system: str, user_message: str, max_tokens: int) -> str:
@@ -112,7 +124,9 @@ async def _call_groq(system: str, user_message: str, max_tokens: int) -> str:
     except RuntimeError as e:
         # If 404 model not found, attempt fallbacks
         if "404" in str(e):
-            logger.warning(f"Groq model '{settings.llm_model}' returned 404. Trying fallback models...")
+            logger.warning(
+                f"Groq model '{settings.llm_model}' returned 404. Trying fallback models..."
+            )
             for fallback_model in GROQ_FALLBACK_MODELS:
                 if fallback_model == settings.llm_model:
                     continue
@@ -169,7 +183,13 @@ async def _call_gemini(system: str, user_message: str, max_tokens: int) -> str:
         )
         resp.raise_for_status()
         data = resp.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"]
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise RuntimeError("Gemini returned empty candidates")
+        parts = candidates[0].get("content", {}).get("parts", [])
+        if not parts or not parts[0].get("text"):
+            raise RuntimeError("Gemini returned empty content")
+        return parts[0]["text"]
 
 
 _PROVIDERS = {
@@ -251,7 +271,9 @@ async def call_llm_with_browsing(
 
     # ran out of rounds — force a final answer
     final = await call_llm(
-        system, transcript + "\n\nGive your final answer now, no more searching.", max_tokens=1000
+        system,
+        transcript + "\n\nGive your final answer now, no more searching.",
+        max_tokens=1000,
     )
     return final
 

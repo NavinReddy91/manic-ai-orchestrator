@@ -311,7 +311,7 @@ def run_optimized_task(self, task_id: str):
                     result_json = json.loads(dept_result)
                     if "files_changed" in result_json:
                         all_files_changed.extend(result_json["files_changed"])
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError):
                     pass
 
                 # Accumulate context for next department
@@ -419,7 +419,7 @@ def run_optimized_task(self, task_id: str):
         if workspace:
             try:
                 shutil.rmtree(workspace, ignore_errors=True)
-            except:
+            except OSError:
                 pass
         db.close()
 
@@ -434,10 +434,8 @@ async def _execute_coding_department(
     repo_path: str,
 ) -> str:
     """Execute coding department with file operations."""
-    # Get coding head's plan
-    coding_plan = asyncio.run(
-        delegate(system, f"{instructions}\n\nContext:\n{context}")
-    )
+    # Get coding head's plan — already inside async, call directly
+    coding_plan = await delegate(system, f"{instructions}\n\nContext:\n{context}")
 
     if not coding_plan:
         return json.dumps({"summary": "No coding changes needed", "files_changed": []})

@@ -3,6 +3,7 @@
 const API_BASE = window.location.origin;
 let currentOrgId = null;
 let refreshInterval = null;
+let activeSSEConnections = {};
 
 // Global error logger
 window.addEventListener('error', (event) => {
@@ -41,8 +42,9 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOrgChart();
     loadOrganizations();
     loadTasks();
+    loadUsageStats();
     
-    // Auto-refresh tasks every 5 seconds
+    // Auto-refresh tasks every 5 seconds (fallback if SSE fails)
     refreshInterval = setInterval(loadTasks, 5000);
     
     // Event listeners
@@ -172,6 +174,10 @@ function renderTaskList(tasks) {
     
     container.innerHTML = tasks.map(task => {
         const isRunning = task.status === 'running' || task.status === 'planning';
+        const tokenPercent = task.token_budget > 0 
+            ? Math.min(100, Math.round(((task.tokens_used || 0) / task.token_budget) * 100))
+            : 0;
+        
         return `
             <div class="task-item ${isRunning ? 'task-running-pulse' : ''}" onclick="showTaskDetail('${task.id}')">
                 <div class="task-item-header">
@@ -184,9 +190,10 @@ function renderTaskList(tasks) {
                 <div class="task-prompt">${escapeHtml((task.prompt || '').substring(0, 150))}${(task.prompt || '').length > 150 ? '...' : ''}</div>
                 <div class="task-meta">
                     <span>LLM Calls: ${task.llm_call_count || 0}</span>
-                    <span>Tokens: ~${task.estimated_tokens || task.tokens_used || 0}</span>
+                    <span>Tokens: ~${task.tokens_used || 0}/${task.token_budget || 0} (${tokenPercent}%)</span>
                     <span>Created: ${formatDate(task.created_at)}</span>
                 </div>
+                ${isRunning ? `<div class="task-progress-mini"><div class="task-progress-bar" style="width: ${tokenPercent}%"></div></div>` : ''}
             </div>
         `;
     }).join('');
@@ -277,6 +284,11 @@ async function showTaskDetail(taskId) {
                 detailElem.scrollIntoView();
             }
         }
+        
+        // Connect to SSE for real-time updates if task is running
+        if (task.status === 'running' || task.status === 'planning') {
+            connectSSE(taskId);
+        }
     } catch (error) {
         console.error('Error loading task detail:', error);
         showNotification('Failed to load task details', 'error');
@@ -288,13 +300,19 @@ function renderTaskDetail(task) {
     const container = document.getElementById('task-detail-content');
     const isRunning = task.status === 'running' || task.status === 'planning';
     
+    // Calculate token usage percentage
+    const tokenPercent = task.token_budget > 0 
+        ? Math.min(100, Math.round((task.tokens_used / task.token_budget) * 100))
+        : 0;
+    const tokenBarColor = tokenPercent > 80 ? 'var(--danger)' : tokenPercent > 50 ? 'var(--warning)' : 'var(--success)';
+    
     let html = `
         <div class="detail-section">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h4>Mission Info</h4>
                 ${isRunning ? `
                     <button class="btn-danger abort-btn" onclick="cancelTask('${task.id}')">
-                        <span class="btn-icon">⏹</span> ABORT MISSION (STOP RUNNING)
+                        <span class="btn-icon">⏹</span> ABORT MISSION
                     </button>
                 ` : ''}
             </div>
@@ -318,9 +336,18 @@ function renderTaskDetail(task) {
                 <span class="detail-label">LLM Calls:</span>
                 <span class="detail-value">${task.llm_call_count}</span>
             </div>
-            <div class="detail-field">
-                <span class="detail-label">Est. Tokens:</span>
-                <span class="detail-value">~${task.estimated_tokens}</span>
+        </div>
+        
+        <div class="detail-section">
+            <h4>Token Usage</h4>
+            <div class="token-usage-container">
+                <div class="token-bar-bg">
+                    <div class="token-bar-fill" style="width: ${tokenPercent}%; background: ${tokenBarColor};"></div>
+                </div>
+                <div class="token-stats">
+                    <span>${task.tokens_used || 0} / ${task.token_budget || 0} tokens</span>
+                    <span>${tokenPercent}% used</span>
+                </div>
             </div>
         </div>
         
@@ -438,8 +465,10 @@ function closeCreateOrgModal() {
 // Render agent tree recursively
 function renderAgentTree(node, isRoot = false) {
     const statusClass = node.status;
+    const nodeClass = `tree-node ${isRoot ? 'tree-node-root' : ''} ${statusClass}`;
+    
     let html = `
-        <div class="tree-node ${isRoot ? 'tree-node-root' : ''}">
+        <div class="${nodeClass}">
             <div class="tree-node-header">
                 <span class="tree-node-label">${node.label}</span>
                 <span class="tree-node-status task-status ${statusClass}">${node.status}</span>
@@ -519,3 +548,99 @@ async function ensureOrganization() {
 
 // Check if we need to create an organization
 setTimeout(ensureOrganization, 1000);
+
+// SSE (Server-Sent Events) for real-time task updates
+function connectSSE(taskId) {
+    // Close existing connection for this task if any
+    if (activeSSEConnections[taskId]) {
+        activeSSEConnections[taskId].close();
+    }
+
+    const eventSource = new EventSource(`${API_BASE}/tasks/${taskId}/stream`);
+    activeSSEConnections[taskId] = eventSource;
+
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            
+            // Update task status in the UI
+            updateTaskStatus(taskId, data);
+            
+            // If task is complete, close the connection
+            if (data.completed || ['done', 'failed', 'cancelled'].includes(data.task_status)) {
+                eventSource.close();
+                delete activeSSEConnections[taskId];
+                loadTasks(); // Refresh the task list
+            }
+        } catch (e) {
+            console.error('SSE parse error:', e);
+        }
+    };
+
+    eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        eventSource.close();
+        delete activeSSEConnections[taskId];
+    };
+}
+
+function updateTaskStatus(taskId, data) {
+    // Update task item in the list
+    const taskItem = document.querySelector(`[onclick*="${taskId}"]`);
+    if (taskItem) {
+        const statusEl = taskItem.querySelector('.task-status');
+        if (statusEl) {
+            statusEl.textContent = data.task_status;
+            statusEl.className = `task-status ${data.task_status}`;
+        }
+        
+        // Update token usage
+        const metaEl = taskItem.querySelector('.task-meta');
+        if (metaEl && data.tokens_used !== undefined) {
+            const tokenSpan = metaEl.querySelector('span:nth-child(2)');
+            if (tokenSpan) {
+                tokenSpan.textContent = `Tokens: ~${data.tokens_used}/${data.token_budget}`;
+            }
+        }
+    }
+    
+    // If task detail is open, refresh it
+    const detailEl = document.getElementById('task-detail');
+    if (detailEl && detailEl.style.display !== 'none') {
+        showTaskDetail(taskId);
+    }
+}
+
+// Load usage statistics
+async function loadUsageStats() {
+    try {
+        const response = await fetch(`${API_BASE}/admin/stats`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('admin_secret') || ''}`
+            }
+        });
+        
+        if (response.ok) {
+            const stats = await response.json();
+            updateUsageDisplay(stats);
+        }
+    } catch (error) {
+        // Admin stats may not be accessible, that's okay
+        console.log('Usage stats not available');
+    }
+}
+
+function updateUsageDisplay(stats) {
+    // Update header stats
+    const taskCountEl = document.getElementById('task-count');
+    if (taskCountEl && stats.total_tasks !== undefined) {
+        taskCountEl.textContent = stats.total_tasks;
+    }
+    
+    // Could add more stats display here (tokens used, LLM calls, etc.)
+}
+
+// Close all SSE connections on page unload
+window.addEventListener('beforeunload', () => {
+    Object.values(activeSSEConnections).forEach(conn => conn.close());
+});

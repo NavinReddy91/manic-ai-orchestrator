@@ -93,7 +93,9 @@ async def create_task(
         try:
             run_optimized_task.delay(task.id)
         except Exception as e:
-            logger.warning(f"Celery dispatch failed ({e}), falling back to background thread")
+            logger.warning(
+                f"Celery dispatch failed ({e}), falling back to background thread"
+            )
             asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
     else:
         asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
@@ -208,8 +210,18 @@ async def stream_task_progress(
 
     async def event_stream():
         last_agent_states = {}
+        max_duration = 3600  # 1 hour max SSE connection
+        start_time = asyncio.get_event_loop().time()
+        heartbeat_interval = 5
+        last_heartbeat = start_time
 
         while True:
+            # Timeout protection — prevent infinite connections
+            elapsed = asyncio.get_event_loop().time() - start_time
+            if elapsed > max_duration:
+                yield f"data: {json.dumps({'error': 'Stream timeout exceeded', 'completed': True})}\n\n"
+                break
+
             # Refresh task from DB
             db_task = db.query(Task).filter_by(id=task_id).first()
             if not db_task:
@@ -236,8 +248,13 @@ async def stream_task_progress(
                     agent_updates.append(current_state)
                     last_agent_states[agent.id] = current_state
 
-            # Send update if there are changes or every 5 seconds as heartbeat
-            if agent_updates or True:  # Always send for now (heartbeat)
+            # Send update if there are changes or as periodic heartbeat
+            now = asyncio.get_event_loop().time()
+            should_send = bool(agent_updates) or (
+                now - last_heartbeat >= heartbeat_interval
+            )
+            if should_send:
+                last_heartbeat = now
                 progress = {
                     "task_id": task_id,
                     "task_status": db_task.status,
@@ -285,7 +302,13 @@ def _serialize_node(db: Session, agent_run: AgentRun) -> dict:
         .order_by(AgentRun.order_index)
         .all()
     )
-    node = ORG_CHART[agent_run.agent_key]
+    node = ORG_CHART.get(
+        agent_run.agent_key,
+        {
+            "label": agent_run.agent_key,
+            "team": "unknown",
+        },
+    )
     return {
         "id": agent_run.id,
         "agent_key": agent_run.agent_key,

@@ -22,7 +22,11 @@ class CreateOrganizationRequest(BaseModel):
 
 
 def _serialize(org: Organization) -> dict:
-    return {"id": org.id, "name": org.name, "created_at": org.created_at.isoformat()}
+    return {
+        "id": org.id,
+        "name": org.name,
+        "created_at": org.created_at.isoformat() if org.created_at else None,
+    }
 
 
 @router.post("")

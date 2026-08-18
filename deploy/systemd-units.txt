@@ -1,13 +1,13 @@
-# --- /etc/systemd/system/nexus-api.service ---
+# --- /etc/systemd/system/manic-api.service ---
 [Unit]
-Description=Nexus Orchestrator API
+Description=Manic AI Orchestrator API
 After=network.target postgresql.service redis.service
 
 [Service]
 User=deploy
-WorkingDirectory=/opt/nexus-orchestrator
-EnvironmentFile=/opt/nexus-orchestrator/.env
-ExecStart=/opt/nexus-orchestrator/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8010
+WorkingDirectory=/opt/manic-ai-orchestrator
+EnvironmentFile=/opt/manic-ai-orchestrator/.env
+ExecStart=/opt/manic-ai-orchestrator/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=5
 
@@ -15,16 +15,16 @@ RestartSec=5
 WantedBy=multi-user.target
 
 
-# --- /etc/systemd/system/nexus-worker.service ---
+# --- /etc/systemd/system/manic-worker.service ---
 [Unit]
-Description=Nexus Orchestrator Celery Worker
+Description=Manic AI Orchestrator Celery Worker
 After=network.target postgresql.service redis.service
 
 [Service]
 User=deploy
-WorkingDirectory=/opt/nexus-orchestrator
-EnvironmentFile=/opt/nexus-orchestrator/.env
-ExecStart=/opt/nexus-orchestrator/venv/bin/celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
+WorkingDirectory=/opt/manic-ai-orchestrator
+EnvironmentFile=/opt/manic-ai-orchestrator/.env
+ExecStart=/opt/manic-ai-orchestrator/venv/bin/celery -A app.optimized_worker.celery_app worker --loglevel=info --concurrency=4
 Restart=always
 RestartSec=5
 
@@ -33,10 +33,10 @@ WantedBy=multi-user.target
 
 
 # --- Setup (once) ---
-# cd /opt && git clone <your repo> nexus-orchestrator
-# cd nexus-orchestrator && python3 -m venv venv && venv/bin/pip install -r requirements.txt
+# cd /opt && git clone <your repo> manic-ai-orchestrator
+# cd manic-ai-orchestrator && python3 -m venv venv && venv/bin/pip install -r requirements.txt
 # cp .env.example .env && nano .env   # fill in real values
 # sudo cp deploy/*.service /etc/systemd/system/
 # sudo systemctl daemon-reload
-# sudo systemctl enable --now nexus-api nexus-worker
-# sudo systemctl status nexus-api nexus-worker   # confirm both are "active (running)"
+# sudo systemctl enable --now manic-api manic-worker
+# sudo systemctl status manic-api manic-worker   # confirm both are "active (running)"

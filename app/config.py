@@ -75,7 +75,33 @@ class Settings(BaseSettings):
                 or ""
             )
         if not self.token_encryption_key:
-            self.token_encryption_key = Fernet.generate_key().decode()
+            # Generate a key and persist it to .env so it survives restarts.
+            # Without persistence, all encrypted tokens (e.g. GitHub OAuth)
+            # become unreadable after every process restart.
+            import os
+
+            new_key = Fernet.generate_key().decode()
+            self.token_encryption_key = new_key
+            try:
+                env_path = os.path.join(os.getcwd(), ".env")
+                if os.path.exists(env_path):
+                    with open(env_path, "a") as f:
+                        f.write(f"\nTOKEN_ENCRYPTION_KEY={new_key}\n")
+                    logger.info(
+                        "Generated TOKEN_ENCRYPTION_KEY and saved to .env. "
+                        "Restart not needed."
+                    )
+                else:
+                    logger.warning(
+                        "TOKEN_ENCRYPTION_KEY auto-generated but .env not found. "
+                        "Set TOKEN_ENCRYPTION_KEY in your environment to persist "
+                        "encrypted tokens across restarts."
+                    )
+            except OSError:
+                logger.warning(
+                    "Could not write TOKEN_ENCRYPTION_KEY to .env. "
+                    "Set it manually in your environment."
+                )
         self._validate()
 
     def _validate(self):
