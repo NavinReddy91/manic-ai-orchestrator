@@ -166,16 +166,16 @@ function renderTaskList(tasks) {
         return `
             <div class="task-item ${isRunning ? 'task-running-pulse' : ''}" onclick="showTaskDetail('${task.id}')">
                 <div class="task-item-header">
-                    <span class="task-id">${task.id.substring(0, 8)}...</span>
+                    <span class="task-id">${(task.id || '').substring(0, 8)}...</span>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <span class="task-status ${task.status}">${task.status}</span>
                         ${isRunning ? `<button class="btn-danger-sm" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Stop running mission">⏹ Stop</button>` : ''}
                     </div>
                 </div>
-                <div class="task-prompt">${escapeHtml(task.prompt.substring(0, 150))}${task.prompt.length > 150 ? '...' : ''}</div>
+                <div class="task-prompt">${escapeHtml((task.prompt || '').substring(0, 150))}${(task.prompt || '').length > 150 ? '...' : ''}</div>
                 <div class="task-meta">
-                    <span>LLM Calls: ${task.llm_call_count}</span>
-                    <span>Tokens: ~${task.estimated_tokens}</span>
+                    <span>LLM Calls: ${task.llm_call_count || 0}</span>
+                    <span>Tokens: ~${task.estimated_tokens || task.tokens_used || 0}</span>
                     <span>Created: ${formatDate(task.created_at)}</span>
                 </div>
             </div>
@@ -446,8 +446,13 @@ function escapeHtml(text) {
 
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    try {
+        const iso = String(dateString).replace(' ', 'T');
+        const date = new Date(iso);
+        return isNaN(date.getTime()) ? String(dateString) : date.toLocaleString();
+    } catch (e) {
+        return String(dateString);
+    }
 }
 
 function showNotification(message, type = 'info') {
