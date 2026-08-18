@@ -152,3 +152,36 @@ else:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "manic-ai-orchestrator", "version": "1.0.0"}
+
+
+@app.get("/debug/llm-test")
+async def llm_test():
+    """Test endpoint to verify LLM connection is working."""
+    from .llm import call_llm
+    from .config import settings
+
+    if not settings.llm_api_key:
+        return {
+            "error": "LLM_API_KEY not configured",
+            "provider": settings.llm_provider,
+        }
+
+    try:
+        response = await call_llm(
+            "You are a test assistant.",
+            "Say 'LLM connection successful' in exactly those words.",
+            max_tokens=50,
+        )
+        return {
+            "status": "success",
+            "provider": settings.llm_provider,
+            "model": settings.llm_model,
+            "response": response,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "provider": settings.llm_provider,
+            "model": settings.llm_model,
+            "error": str(e),
+        }

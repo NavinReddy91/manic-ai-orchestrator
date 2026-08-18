@@ -88,21 +88,55 @@ async def create_task(
         ip_address=client_ip,
     )
 
-    # Start optimized task execution (Celery if Redis configured, or async background thread)
+    # Start optimized task execution (Celery if Redis configured, or background thread)
     if settings.redis_url:
         try:
             run_optimized_task.delay(task.id)
+            logger.info(f"Task {task.id} dispatched to Celery worker")
         except Exception as e:
             logger.warning(
                 f"Celery dispatch failed ({e}), falling back to background thread"
             )
-            asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
+            _start_background_task(task.id)
     else:
-        asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
+        # No Redis - use background thread
+        logger.info(f"Starting background task execution for {task.id}")
+        _start_background_task(task.id)
 
     logger.info(f"Task created: {task.id} for org {org.id}")
 
     return _serialize_task(db, task)
+
+
+def _start_background_task(task_id: str):
+    """Start task execution in a background thread with proper error handling."""
+    import threading
+
+    def run_task():
+        try:
+            logger.info(f"Background thread starting for task {task_id}")
+            run_optimized_task(None, task_id)
+            logger.info(f"Background thread completed for task {task_id}")
+        except Exception as e:
+            logger.exception(f"Background task {task_id} failed: {e}")
+            # Mark task as failed
+            try:
+                from .db import SessionLocal
+
+                db = SessionLocal()
+                task = db.query(Task).filter_by(id=task_id).first()
+                if task and task.status not in ("done", "failed", "cancelled"):
+                    task.status = "failed"
+                    task.final_report = f"Task execution failed: {str(e)}"
+                    task.completed_at = datetime.utcnow()
+                    db.commit()
+                db.close()
+            except Exception as db_err:
+                logger.error(f"Failed to mark task as failed: {db_err}")
+
+    thread = threading.Thread(target=run_task, daemon=True, name=f"task-{task_id}")
+    thread.start()
+    logger.info(f"Background thread started for task {task_id}")
 
 
 @router.get("/{task_id}")
