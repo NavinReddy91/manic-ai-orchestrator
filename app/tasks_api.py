@@ -7,7 +7,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ from .auth import get_current_user
 from .db import get_db
 from .models import Task, AgentRun, Organization
 from .org_chart import ORG_CHART, ROOT_AGENT
-from .background_worker import start_task_execution
+from .optimized_worker import run_optimized_task
 from .rate_limiter import check_rate_limit
 from .audit import log_action
 
@@ -37,7 +37,6 @@ class CreateTaskRequest(BaseModel):
 async def create_task(
     body: CreateTaskRequest,
     request: Request,
-    background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -89,8 +88,8 @@ async def create_task(
         ip_address=client_ip,
     )
 
-    # Start task execution in background
-    background_tasks.add_task(_run_task_background, task.id, user["sub"])
+    # Start optimized task execution
+    run_optimized_task.delay(task.id)
 
     logger.info(f"Task created: {task.id} for org {org.id}")
 
@@ -321,8 +320,3 @@ def _serialize_task(db: Session, task: Task) -> dict:
         "cancelled_at": task.cancelled_at.isoformat() if task.cancelled_at else None,
         "org_tree": _serialize_node(db, root) if root else None,
     }
-
-
-async def _run_task_background(task_id: str, user_id: str):
-    """Wrapper to run the async task execution."""
-    await start_task_execution(task_id, user_id)
