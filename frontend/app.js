@@ -4,6 +4,15 @@ const API_BASE = window.location.origin;
 let currentOrgId = null;
 let refreshInterval = null;
 
+// Global error logger
+window.addEventListener('error', (event) => {
+    console.error('Frontend Error:', event.error || event.message);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled Promise Rejection:', event.reason);
+});
+
 // Organization chart structure
 const ORG_CHART = {
     ceo: { label: "Chief Agent", team: "executive", reports: ["coding_head", "marketing_head", "growth_head", "accounting_head", "sales_head", "operations_head"] },
@@ -214,8 +223,21 @@ async function deployTask() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to deploy task');
+            let errMsg = `Server Error (${response.status})`;
+            try {
+                const error = await response.json();
+                if (typeof error.detail === 'string') {
+                    errMsg = error.detail;
+                } else if (Array.isArray(error.detail)) {
+                    errMsg = error.detail.map(d => d.msg || JSON.stringify(d)).join(', ');
+                } else if (error.detail) {
+                    errMsg = JSON.stringify(error.detail);
+                }
+            } catch (e) {
+                const text = await response.text().catch(() => '');
+                if (text) errMsg = text.substring(0, 200);
+            }
+            throw new Error(errMsg);
         }
         
         const task = await response.json();

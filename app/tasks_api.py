@@ -88,8 +88,15 @@ async def create_task(
         ip_address=client_ip,
     )
 
-    # Start optimized task execution
-    run_optimized_task.delay(task.id)
+    # Start optimized task execution (Celery if Redis configured, or async background thread)
+    if settings.redis_url:
+        try:
+            run_optimized_task.delay(task.id)
+        except Exception as e:
+            logger.warning(f"Celery dispatch failed ({e}), falling back to background thread")
+            asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
+    else:
+        asyncio.create_task(asyncio.to_thread(run_optimized_task, None, task.id))
 
     logger.info(f"Task created: {task.id} for org {org.id}")
 
