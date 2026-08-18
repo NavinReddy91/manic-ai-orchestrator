@@ -1,5 +1,5 @@
 # Manic AI Orchestrator — Dockerfile
-FROM python:3.12-slim
+FROM python:3.12-bookworm-slim
 
 # Install git (required for coding agents) + WeasyPrint system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
