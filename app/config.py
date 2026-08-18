@@ -36,6 +36,7 @@ class Settings(BaseSettings):
 
     # --- Cost control ---
     max_llm_calls_per_task: int = 0
+    max_tokens_per_task: int = 15000  # Default token budget per task
 
     # --- Rate limiting ---
     rate_limit_tasks_per_minute: int = 10
@@ -63,6 +64,7 @@ class Settings(BaseSettings):
         super().__init__(**kwargs)
         if not self.llm_api_key:
             import os
+
             self.llm_api_key = (
                 os.getenv("LLM_API_KEY")
                 or os.getenv("GROQ_API_KEY")

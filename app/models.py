@@ -70,6 +70,8 @@ class Task(Base):
     final_report = Column(Text, nullable=True)
     llm_call_count = Column(Integer, default=0)
     estimated_tokens = Column(Integer, default=0)
+    token_budget = Column(Integer, default=15000)  # Max tokens allowed for this task
+    tokens_used = Column(Integer, default=0)  # Actual tokens consumed
     priority = Column(Integer, default=0)  # 0=normal, 1=high, 2=urgent
     callback_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

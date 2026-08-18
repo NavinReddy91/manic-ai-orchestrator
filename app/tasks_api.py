@@ -4,9 +4,11 @@ Create, list, get, and cancel tasks.
 """
 
 import asyncio
+import json
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -28,6 +30,7 @@ class CreateTaskRequest(BaseModel):
     repo: str | None = None  # "owner/repo" — only needed if the request touches code
     callback_url: str | None = None  # webhook URL to POST when task completes
     priority: int = 0  # 0=normal, 1=high, 2=urgent
+    token_budget: int | None = None  # Optional: override default token budget
 
 
 @router.post("")
@@ -54,6 +57,8 @@ async def create_task(
         )
 
     # Create task
+    from .config import settings
+
     task = Task(
         user_id=user["sub"],
         organization_id=org.id,
@@ -61,6 +66,7 @@ async def create_task(
         repo=body.repo,
         callback_url=body.callback_url,
         priority=body.priority,
+        token_budget=body.token_budget or settings.max_tokens_per_task,
         status="planning",
     )
     db.add(task)
@@ -180,6 +186,92 @@ def cancel_task(
     return {"status": "cancelled", "task_id": task.id}
 
 
+@router.get("/{task_id}/stream")
+async def stream_task_progress(
+    task_id: str,
+    user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Server-Sent Events endpoint for real-time task progress updates.
+    Streams agent status changes as they happen.
+    """
+    task = db.query(Task).filter_by(id=task_id, user_id=user["sub"]).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    async def event_stream():
+        last_agent_states = {}
+
+        while True:
+            # Refresh task from DB
+            db_task = db.query(Task).filter_by(id=task_id).first()
+            if not db_task:
+                yield f"data: {json.dumps({'error': 'Task not found'})}\n\n"
+                break
+
+            # Get all agent runs for this task
+            agents = db.query(AgentRun).filter_by(task_id=task_id).all()
+
+            # Build progress update
+            agent_updates = []
+            for agent in agents:
+                current_state = {
+                    "key": agent.agent_key,
+                    "status": agent.status,
+                    "label": ORG_CHART.get(agent.agent_key, {}).get(
+                        "label", agent.agent_key
+                    ),
+                    "team": ORG_CHART.get(agent.agent_key, {}).get("team", "unknown"),
+                }
+
+                # Only send if state changed
+                if last_agent_states.get(agent.id) != current_state:
+                    agent_updates.append(current_state)
+                    last_agent_states[agent.id] = current_state
+
+            # Send update if there are changes or every 5 seconds as heartbeat
+            if agent_updates or True:  # Always send for now (heartbeat)
+                progress = {
+                    "task_id": task_id,
+                    "task_status": db_task.status,
+                    "tokens_used": db_task.tokens_used,
+                    "token_budget": db_task.token_budget,
+                    "llm_call_count": db_task.llm_call_count,
+                    "agents": agent_updates if agent_updates else None,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                yield f"data: {json.dumps(progress)}\n\n"
+
+            # Check if task is complete
+            if db_task.status in ("done", "failed", "cancelled"):
+                # Send final update
+                final_progress = {
+                    "task_id": task_id,
+                    "task_status": db_task.status,
+                    "final_report": db_task.final_report,
+                    "tokens_used": db_task.tokens_used,
+                    "token_budget": db_task.token_budget,
+                    "completed": True,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+                yield f"data: {json.dumps(final_progress)}\n\n"
+                break
+
+            # Wait before next check
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
+
+
 def _serialize_node(db: Session, agent_run: AgentRun) -> dict:
     children = (
         db.query(AgentRun)
@@ -219,6 +311,8 @@ def _serialize_task(db: Session, task: Task) -> dict:
         "final_report": task.final_report,
         "llm_call_count": task.llm_call_count,
         "estimated_tokens": task.estimated_tokens,
+        "token_budget": task.token_budget,
+        "tokens_used": task.tokens_used,
         "priority": task.priority,
         "callback_url": task.callback_url,
         "created_at": task.created_at.isoformat(),

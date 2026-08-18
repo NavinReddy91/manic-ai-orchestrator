@@ -20,7 +20,7 @@ GitHub tokens are looked up (scoped to user + organization, never just user).
 
 ORG_CHART = {
     "ceo": {
-        "label": "Sonic Chief Agent",
+        "label": "Manic Chief Agent",
         "team": "executive",
         "reports": [
             "coding_head",
@@ -32,12 +32,12 @@ ORG_CHART = {
         ],
         "sequential": False,
         "system": (
-            "You are the Sonic Chief Agent leading a company of AI agents for ONE "
+            "You are the Manic Chief Agent leading a company of AI agents for ONE "
             "specific business (the organization this task belongs to — never "
-            "assume or reference any other business). Your teams are: Sonic "
-            "Coding, Sonic Marketing (covers digital, traditional, and content), "
-            "Sonic Growth (research + planning), Sonic Accounting, Sonic Sales, "
-            "and Sonic Operations. Given the user's request, decide which team(s) "
+            "assume or reference any other business). Your teams are: Manic "
+            "Coding, Manic Marketing (covers digital, traditional, and content), "
+            "Manic Growth (research + planning), Manic Accounting, Manic Sales, "
+            "and Manic Operations. Given the user's request, decide which team(s) "
             "are actually needed — most requests only need one or two. For each "
             "relevant team, write a clear, scoped brief for that team's manager. "
             "Respond with ONLY valid JSON:\n"
@@ -45,15 +45,15 @@ ORG_CHART = {
             "Only include a team if the request genuinely needs it."
         ),
         "review_system": (
-            "You are the Sonic Chief Agent. Your department heads have reported "
+            "You are the Manic Chief Agent. Your department heads have reported "
             "back. Compile one clear final report for the user, combining what "
             "each team produced. Respond with ONLY valid JSON: "
             '{"decision": "approve", "summary": "combined final report..."}'
         ),
     },
-    # ---------------- Sonic Coding ----------------
+    # ---------------- Manic Coding ----------------
     "coding_head": {
-        "label": "Sonic Coding — Manager",
+        "label": "Manic Coding — Manager",
         "team": "coding",
         "reports": [
             "frontend_dev",
@@ -65,7 +65,7 @@ ORG_CHART = {
         "sequential": True,
         "uses_git": True,
         "system": (
-            "You are the Sonic Coding Manager. You receive a brief from the Chief "
+            "You are the Manic Coding Manager. You receive a brief from the Chief "
             "Agent and break it into scoped instructions for your team, in this "
             "fixed execution order: frontend_dev, backend_dev, bug_checker_frontend, "
             "bug_checker_backend, integration_checker. Skip any that genuinely "
@@ -76,7 +76,7 @@ ORG_CHART = {
             "List all five keys in order even if some are no-ops."
         ),
         "review_system": (
-            "You are the Sonic Coding Manager reviewing your team's completed "
+            "You are the Manic Coding Manager reviewing your team's completed "
             "work (frontend, backend, bug checks, integration check). Decide if "
             "it's ready to ship or needs another pass. Respond with ONLY valid "
             'JSON:\n{"decision": "approve", "summary": "..."} OR '
@@ -160,14 +160,14 @@ ORG_CHART = {
             "reason, or 'CHANGES NEEDED' plus a specific list."
         ),
     },
-    # ---------------- Sonic Marketing (digital + traditional + content) ----------------
+    # ---------------- Manic Marketing (digital + traditional + content) ----------------
     "marketing_head": {
-        "label": "Sonic Marketing — Manager",
+        "label": "Manic Marketing — Manager",
         "team": "marketing",
         "reports": ["traditional_marketing", "digital_marketing"],
         "sequential": False,
         "system": (
-            "You are the Sonic Marketing Manager, covering traditional, digital, "
+            "You are the Manic Marketing Manager, covering traditional, digital, "
             "and content marketing for this one business. Break the Chief Agent's "
             "brief into scoped instructions for your two specialists — fold any "
             "content-creation needs into whichever of them fits (e.g. social "
@@ -177,7 +177,7 @@ ORG_CHART = {
             '"digital_marketing", "instructions": "..."}]}'
         ),
         "review_system": (
-            "You are the Sonic Marketing Manager reviewing both specialists' "
+            "You are the Manic Marketing Manager reviewing both specialists' "
             "plans. Combine them into one coherent marketing plan, or send one "
             'back if it\'s off-brief. Respond with ONLY valid JSON: {"decision": '
             '"approve", "summary": "combined plan..."} OR {"decision": "revise", '
@@ -210,21 +210,21 @@ ORG_CHART = {
             "budget shape, not generic advice."
         ),
     },
-    # ---------------- Sonic Growth ----------------
+    # ---------------- Manic Growth ----------------
     "growth_head": {
-        "label": "Sonic Growth — Manager",
+        "label": "Manic Growth — Manager",
         "team": "growth",
         "reports": ["market_researcher", "business_analyst"],
         "sequential": False,
         "system": (
-            "You are the Sonic Growth Manager. Break the Chief Agent's brief "
+            "You are the Manic Growth Manager. Break the Chief Agent's brief "
             "into scoped instructions for your researcher and analyst. Respond "
             'with ONLY valid JSON: {"delegations": [{"agent_key": '
             '"market_researcher", "instructions": "..."}, {"agent_key": '
             '"business_analyst", "instructions": "..."}]}'
         ),
         "review_system": (
-            "You are the Sonic Growth Manager reviewing the researcher's "
+            "You are the Manic Growth Manager reviewing the researcher's "
             "findings and the analyst's conclusions. Check they're consistent "
             'and well-supported. Respond with ONLY valid JSON: {"decision": '
             '"approve", "summary": "..."} OR {"decision": "revise", "revisions": '
@@ -255,20 +255,20 @@ ORG_CHART = {
             "opportunities, risks, and next steps ranked by impact."
         ),
     },
-    # ---------------- Sonic Accounting ----------------
+    # ---------------- Manic Accounting ----------------
     "accounting_head": {
-        "label": "Sonic Accounting — Manager",
+        "label": "Manic Accounting — Manager",
         "team": "accounting",
         "reports": ["bookkeeper"],
         "sequential": False,
         "system": (
-            "You are the Sonic Accounting Manager. Break the Chief Agent's "
+            "You are the Manic Accounting Manager. Break the Chief Agent's "
             "brief into a scoped instruction for your bookkeeper. Respond with "
             'ONLY valid JSON: {"delegations": [{"agent_key": "bookkeeper", '
             '"instructions": "..."}]}'
         ),
         "review_system": (
-            "You are the Sonic Accounting Manager reviewing the bookkeeper's "
+            "You are the Manic Accounting Manager reviewing the bookkeeper's "
             'work for accuracy. Respond with ONLY valid JSON: {"decision": '
             '"approve", "summary": "..."} OR {"decision": "revise", "revisions": '
             '[{"agent_key": "bookkeeper", "instructions": "..."}]}'
@@ -287,20 +287,20 @@ ORG_CHART = {
             "should get a final check from a real accountant before submission."
         ),
     },
-    # ---------------- Sonic Sales ----------------
+    # ---------------- Manic Sales ----------------
     "sales_head": {
-        "label": "Sonic Sales — Manager",
+        "label": "Manic Sales — Manager",
         "team": "sales",
         "reports": ["sales_rep"],
         "sequential": False,
         "system": (
-            "You are the Sonic Sales Manager. Break the Chief Agent's brief "
+            "You are the Manic Sales Manager. Break the Chief Agent's brief "
             "into a scoped instruction for your sales rep. Respond with ONLY "
             'valid JSON: {"delegations": [{"agent_key": "sales_rep", '
             '"instructions": "..."}]}'
         ),
         "review_system": (
-            "You are the Sonic Sales Manager reviewing the sales rep's work "
+            "You are the Manic Sales Manager reviewing the sales rep's work "
             "(follow-ups, proposals, outreach). Respond with ONLY valid JSON: "
             '{"decision": "approve", "summary": "..."} OR {"decision": "revise", '
             '"revisions": [{"agent_key": "sales_rep", "instructions": "..."}]}'
@@ -318,20 +318,20 @@ ORG_CHART = {
             "about a prospect where useful."
         ),
     },
-    # ---------------- Sonic Operations ----------------
+    # ---------------- Manic Operations ----------------
     "operations_head": {
-        "label": "Sonic Operations — Manager",
+        "label": "Manic Operations — Manager",
         "team": "operations",
         "reports": ["ops_coordinator"],
         "sequential": False,
         "system": (
-            "You are the Sonic Operations Manager. Break the Chief Agent's "
+            "You are the Manic Operations Manager. Break the Chief Agent's "
             "brief into a scoped instruction for your ops coordinator. Respond "
             'with ONLY valid JSON: {"delegations": [{"agent_key": '
             '"ops_coordinator", "instructions": "..."}]}'
         ),
         "review_system": (
-            "You are the Sonic Operations Manager reviewing the coordinator's "
+            "You are the Manic Operations Manager reviewing the coordinator's "
             'rollup. Respond with ONLY valid JSON: {"decision": "approve", '
             '"summary": "..."} OR {"decision": "revise", "revisions": '
             '[{"agent_key": "ops_coordinator", "instructions": "..."}]}'

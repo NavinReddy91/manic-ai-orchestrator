@@ -136,6 +136,25 @@ def _validate_file_sizes(files: list[dict]) -> None:
             )
 
 
+def _check_token_budget(db: Session, task: Task, estimated_tokens: int) -> bool:
+    """
+    Check if task has exceeded token budget. Returns True if within budget.
+    """
+    if task.token_budget <= 0:
+        return True  # No budget limit
+
+    return (task.tokens_used + estimated_tokens) <= task.token_budget
+
+
+def _update_token_usage(db: Session, task: Task, tokens: int):
+    """
+    Update task token usage and commit.
+    """
+    task.tokens_used += tokens
+    task.estimated_tokens += tokens
+    db.commit()
+
+
 async def _run_git_worker(
     db: Session, task: Task, agent_run: AgentRun, node: dict, context: str
 ) -> str:
@@ -146,6 +165,21 @@ async def _run_git_worker(
         )
     if not task.repo:
         raise RuntimeError("No repo set on this task — coding agents need one.")
+
+    # Check token budget before expensive operations
+    estimated_tokens = 2000  # Git operations typically use more tokens
+    if not _check_token_budget(db, task, estimated_tokens):
+        logger.warning(
+            f"Token budget exceeded for git task {task.id}: {task.tokens_used}/{task.token_budget}",
+            extra={"task_id": task.id, "agent_key": agent_run.agent_key},
+        )
+        return json.dumps(
+            {
+                "summary": f"Token budget exceeded ({task.tokens_used}/{task.token_budget} tokens used). Git operation stopped.",
+                "budget_exceeded": True,
+                "files_changed": [],
+            }
+        )
 
     workdir = tempfile.mkdtemp(prefix="manic_")
     try:
@@ -198,9 +232,9 @@ async def _run_git_worker(
                 repo_path, branch, f"{node['label']}: {summary}", token, task.repo
             )
 
-        # Track LLM call and estimate tokens
-        task.llm_call_count += 1
-        task.estimated_tokens += len(raw) // 4  # rough estimate
+        # Track LLM call and actual token usage
+        actual_tokens = len(raw) // 4  # Rough estimate
+        _update_token_usage(db, task, actual_tokens)
 
         return json.dumps(
             {"summary": summary, "files_changed": [f["path"] for f in files]}
@@ -215,6 +249,20 @@ async def _execute_leaf(
     # Check for cancellation
     if _is_task_cancelled(db, task.id):
         return json.dumps({"summary": "Task was cancelled"})
+
+    # Check token budget before execution
+    estimated_tokens = 1000  # Rough estimate for this call
+    if not _check_token_budget(db, task, estimated_tokens):
+        logger.warning(
+            f"Token budget exceeded for task {task.id}: {task.tokens_used}/{task.token_budget}",
+            extra={"task_id": task.id, "agent_key": agent_run.agent_key},
+        )
+        return json.dumps(
+            {
+                "summary": f"Token budget exceeded ({task.tokens_used}/{task.token_budget} tokens used). Task stopped to prevent excessive costs.",
+                "budget_exceeded": True,
+            }
+        )
 
     # Get org-specific system prompt if available
     system_prompt = _get_agent_system_prompt(
@@ -232,9 +280,9 @@ async def _execute_leaf(
         node.get("uses_browse", False),
     )
 
-    # Track LLM call and estimate tokens
-    task.llm_call_count += 1
-    task.estimated_tokens += len(result) // 4  # rough estimate
+    # Track LLM call and actual token usage
+    actual_tokens = len(result) // 4  # Rough estimate: 1 token ≈ 4 chars
+    _update_token_usage(db, task, actual_tokens)
 
     return result
 
@@ -330,6 +378,25 @@ def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: dict):
         db.commit()
         return
 
+    # Check token budget before delegation
+    estimated_tokens = 800  # Delegation calls typically use ~800 tokens
+    if not _check_token_budget(db, task, estimated_tokens):
+        logger.warning(
+            f"Token budget exceeded for manager delegation {task.id}: {task.tokens_used}/{task.token_budget}",
+            extra={"task_id": task.id, "agent_key": agent_run.agent_key},
+        )
+        agent_run.status = "failed"
+        agent_run.result = json.dumps(
+            {
+                "summary": f"Token budget exceeded ({task.tokens_used}/{task.token_budget} tokens used). Delegation stopped.",
+                "budget_exceeded": True,
+            }
+        )
+        agent_run.completed_at = datetime.utcnow()
+        db.commit()
+        _propagate(db, agent_run)
+        return
+
     existing_children = _children(db, agent_run.id)
     if not existing_children:
         # Get org-specific system prompt if available
@@ -346,8 +413,8 @@ def _dispatch_manager(db: Session, task: Task, agent_run: AgentRun, node: dict):
                 }
             ]
 
-        # Track LLM call
-        task.llm_call_count += 1
+        # Track LLM call and token usage for delegation
+        _update_token_usage(db, task, estimated_tokens)
 
         for i, item in enumerate(planned):
             db.add(
@@ -440,8 +507,9 @@ def _on_child_finished(db: Session, child: AgentRun):
 
     decision = asyncio.run(review(review_prompt, _compile_context(siblings)))
 
-    # Track LLM call
-    task.llm_call_count += 1
+    # Track LLM call and token usage for review
+    review_tokens = 800  # Review calls typically use ~800 tokens
+    _update_token_usage(db, task, review_tokens)
 
     if decision.get("decision") == "revise" and decision.get("revisions"):
         applied_any = False
