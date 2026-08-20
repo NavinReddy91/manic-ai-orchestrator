@@ -7,6 +7,7 @@ import os
 import logging
 import tempfile
 from datetime import datetime
+from html import escape as html_escape
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -98,12 +99,16 @@ async def _generate_html_report(department: str, content: str, task_prompt: str)
     # Convert markdown-like content to HTML
     html_content = _markdown_to_html(content)
 
+    # Escape user-provided content to prevent HTML injection
+    safe_dept_label = html_escape(dept_label)
+    safe_task_prompt = html_escape(task_prompt)
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{dept_label} Report</title>
+    <title>{safe_dept_label} Report</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -146,11 +151,11 @@ async def _generate_html_report(department: str, content: str, task_prompt: str)
     </style>
 </head>
 <body>
-    <h1>{dept_label} Report</h1>
+    <h1>{safe_dept_label} Report</h1>
     
     <div class="meta">
         <p><strong>Generated:</strong> {timestamp}</p>
-        <p><strong>Task:</strong> {task_prompt}</p>
+        <p><strong>Task:</strong> {safe_task_prompt}</p>
     </div>
     
     <h2>Executive Summary</h2>
@@ -160,7 +165,7 @@ async def _generate_html_report(department: str, content: str, task_prompt: str)
     
     <h2>Details</h2>
     <h3>Original Request</h3>
-    <p>{task_prompt}</p>
+    <p>{safe_task_prompt}</p>
     
     <h3>Department Analysis</h3>
     <div class="content">

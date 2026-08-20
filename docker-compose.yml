@@ -8,12 +8,12 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: manic_ai
-      POSTGRES_USER: sonic
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sonic_password}
+      POSTGRES_USER: manic_ai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-manic_ai_password}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sonic"]
+      test: ["CMD-SHELL", "pg_isready -U manic_ai"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -40,7 +40,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/manic_ai
+      - DATABASE_URL=postgresql://manic_ai:${POSTGRES_PASSWORD:-manic_ai_password}@postgres:5432/manic_ai
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:
@@ -55,9 +55,9 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.optimized_worker.celery_app worker --loglevel=info --concurrency=4
     environment:
-      - DATABASE_URL=postgresql://sonic:${POSTGRES_PASSWORD:-sonic_password}@postgres:5432/manic_ai
+      - DATABASE_URL=postgresql://manic_ai:${POSTGRES_PASSWORD:-manic_ai_password}@postgres:5432/manic_ai
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       postgres:

@@ -149,6 +149,25 @@ def run_optimized_task(self, task_id: str):
     Optimized workflow: CEO clones once, shares context sequentially.
     This is 50-70% more token-efficient than parallel execution.
     """
+    logger.info(f"=== run_optimized_task STARTED for task_id={task_id} ===")
+
+    # Check LLM API key first
+    if not settings.llm_api_key:
+        logger.error("LLM_API_KEY not configured! Cannot execute task.")
+        db = SessionLocal()
+        try:
+            task = db.query(Task).filter_by(id=task_id).first()
+            if task:
+                task.status = "failed"
+                task.final_report = "LLM_API_KEY not configured. Please set LLM_API_KEY environment variable."
+                task.completed_at = datetime.utcnow()
+                db.commit()
+        finally:
+            db.close()
+        return
+
+    logger.info(f"LLM provider: {settings.llm_provider}, model: {settings.llm_model}")
+
     db: Session = SessionLocal()
     workspace = None
 
@@ -163,6 +182,7 @@ def run_optimized_task(self, task_id: str):
             return
 
         logger.info(f"Starting optimized task execution: {task_id}")
+        logger.info(f"Task prompt: {task.prompt[:200]}...")
         task.status = "running"
         task.started_at = datetime.utcnow()
         db.commit()
@@ -311,7 +331,7 @@ def run_optimized_task(self, task_id: str):
                     result_json = json.loads(dept_result)
                     if "files_changed" in result_json:
                         all_files_changed.extend(result_json["files_changed"])
-                except:
+                except (json.JSONDecodeError, KeyError, TypeError):
                     pass
 
                 # Accumulate context for next department
@@ -419,7 +439,7 @@ def run_optimized_task(self, task_id: str):
         if workspace:
             try:
                 shutil.rmtree(workspace, ignore_errors=True)
-            except:
+            except OSError:
                 pass
         db.close()
 
@@ -434,10 +454,8 @@ async def _execute_coding_department(
     repo_path: str,
 ) -> str:
     """Execute coding department with file operations."""
-    # Get coding head's plan
-    coding_plan = asyncio.run(
-        delegate(system, f"{instructions}\n\nContext:\n{context}")
-    )
+    # Get coding head's plan — already inside async, call directly
+    coding_plan = await delegate(system, f"{instructions}\n\nContext:\n{context}")
 
     if not coding_plan:
         return json.dumps({"summary": "No coding changes needed", "files_changed": []})

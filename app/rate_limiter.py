@@ -69,9 +69,12 @@ def check_rate_limit(user_id: str) -> None:
             detail=f"Rate limit exceeded: max {settings.rate_limit_tasks_per_hour} tasks per hour",
         )
 
-    # Record this request in both windows
-    redis_client.zadd(minute_key, {str(now): now})
-    redis_client.zadd(hour_key, {str(now): now})
+    # Record this request in both windows (use unique member to avoid collision)
+    import uuid
+
+    request_id = str(uuid.uuid4())
+    redis_client.zadd(minute_key, {request_id: now})
+    redis_client.zadd(hour_key, {request_id: now})
 
     # Clean up old entries (older than 1 minute / 1 hour)
     redis_client.zremrangebyscore(minute_key, 0, now - 60)

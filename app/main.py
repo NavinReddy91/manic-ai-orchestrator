@@ -6,10 +6,10 @@ import os
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from .db import init_db
 from .github_oauth import router as github_router
@@ -36,6 +36,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception(
+        f"Unhandled exception on {request.method} {request.url.path}: {exc}"
+    )
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
+
 # CORS configuration
 from .config import settings
 
@@ -48,7 +57,7 @@ origins = (
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=origins != ["*"],  # credentials not allowed with wildcard
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -143,3 +152,36 @@ else:
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "manic-ai-orchestrator", "version": "1.0.0"}
+
+
+@app.get("/debug/llm-test")
+async def llm_test():
+    """Test endpoint to verify LLM connection is working."""
+    from .llm import call_llm
+    from .config import settings
+
+    if not settings.llm_api_key:
+        return {
+            "error": "LLM_API_KEY not configured",
+            "provider": settings.llm_provider,
+        }
+
+    try:
+        response = await call_llm(
+            "You are a test assistant.",
+            "Say 'LLM connection successful' in exactly those words.",
+            max_tokens=50,
+        )
+        return {
+            "status": "success",
+            "provider": settings.llm_provider,
+            "model": settings.llm_model,
+            "response": response,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "provider": settings.llm_provider,
+            "model": settings.llm_model,
+            "error": str(e),
+        }

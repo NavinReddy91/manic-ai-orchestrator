@@ -70,7 +70,7 @@ def list_templates(
     if organization_id:
         query = query.filter(
             (TaskTemplate.organization_id == organization_id)
-            | (TaskTemplate.organization_id == None)
+            | (TaskTemplate.organization_id.is_(None))
         )
     templates = query.order_by(TaskTemplate.created_at.desc()).all()
     return [_serialize(t) for t in templates]

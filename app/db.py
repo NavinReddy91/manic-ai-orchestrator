@@ -110,7 +110,7 @@ def get_session_local():
 
 
 def init_db():
-    """Create all tables. Called during app startup."""
+    """Create all tables and run migrations. Called during app startup."""
     global _db_initialized
 
     if _db_initialized:
@@ -120,12 +120,48 @@ def init_db():
     SessionLocal = get_session_local()
 
     try:
+        # Create tables if they don't exist
         Base.metadata.create_all(bind=engine)
+
+        # Run migrations for existing databases
+        _run_migrations(engine)
+
         logger.info("Database initialized successfully")
         _db_initialized = True
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
+
+
+def _run_migrations(engine):
+    """Run schema migrations for existing databases."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+
+    # Check if tasks table exists and has the new columns
+    if inspector.has_table("tasks"):
+        columns = [col["name"] for col in inspector.get_columns("tasks")]
+
+        # Add token_budget column if missing
+        if "token_budget" not in columns:
+            logger.info("Adding token_budget column to tasks table")
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE tasks ADD COLUMN token_budget INTEGER DEFAULT 15000"
+                    )
+                )
+                conn.commit()
+
+        # Add tokens_used column if missing
+        if "tokens_used" not in columns:
+            logger.info("Adding tokens_used column to tasks table")
+            with engine.connect() as conn:
+                conn.execute(
+                    text("ALTER TABLE tasks ADD COLUMN tokens_used INTEGER DEFAULT 0")
+                )
+                conn.commit()
 
 
 def get_db():

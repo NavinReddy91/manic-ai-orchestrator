@@ -3,6 +3,7 @@ Admin/debug endpoints — accessible without JWT, protected by admin_secret
 or IP whitelist.
 """
 
+import hmac
 import json
 import logging
 from datetime import datetime, timedelta
@@ -36,7 +37,9 @@ def verify_admin_access(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Admin access not configured")
 
     auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer ") or auth[7:] != settings.admin_secret:
+    if not auth.startswith("Bearer ") or not hmac.compare_digest(
+        auth[7:], settings.admin_secret
+    ):
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 

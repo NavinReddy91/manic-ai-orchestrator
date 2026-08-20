@@ -62,6 +62,8 @@ def upgrade() -> None:
         sa.Column("final_report", sa.Text(), nullable=True),
         sa.Column("llm_call_count", sa.Integer(), nullable=True, default=0),
         sa.Column("estimated_tokens", sa.Integer(), nullable=True, default=0),
+        sa.Column("token_budget", sa.Integer(), nullable=True, default=15000),
+        sa.Column("tokens_used", sa.Integer(), nullable=True, default=0),
         sa.Column("priority", sa.Integer(), nullable=True, default=0),
         sa.Column("callback_url", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=True),
