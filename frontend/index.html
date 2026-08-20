@@ -3,275 +3,666 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manic AI — Agentic Orchestration Platform</title>
+    <title>Manic AI — Agentic Orchestration</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
-    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        :root {
+            --bg: #050816;
+            --panel: #0a1024;
+            --blue: #168cff;
+            --cyan: #13d9ff;
+            --purple: #7b2cff;
+            --pink: #c12cff;
+            --text: #eaf2ff;
+            --muted: #7f91b5;
+            --line: rgba(65, 115, 220, .25);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 50% 35%, rgba(48, 52, 150, .22), transparent 42%),
+                radial-gradient(circle at 20% 80%, rgba(100, 20, 180, .12), transparent 35%),
+                var(--bg);
+            color: var(--text);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            overflow-x: hidden;
+        }
+
+        .scene {
+            width: 100%;
+            min-height: 100vh;
+            position: relative;
+            padding: 55px 35px 70px;
+            overflow: hidden;
+        }
+
+        /* HEADER */
+        .brand {
+            text-align: center;
+            position: relative;
+            z-index: 5;
+            margin-bottom: 40px;
+        }
+
+        .brand-logo {
+            width: 50px;
+            height: 50px;
+            object-fit: contain;
+            margin: 0 auto 15px;
+            display: block;
+            filter: drop-shadow(0 0 15px rgba(22, 140, 255, 0.4));
+            animation: logoPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { filter: drop-shadow(0 0 15px rgba(22, 140, 255, 0.4)); }
+            50% { filter: drop-shadow(0 0 25px rgba(123, 44, 255, 0.6)); }
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: clamp(34px, 5vw, 64px);
+            font-weight: 800;
+            letter-spacing: -2px;
+        }
+
+        .brand h1 span {
+            background: linear-gradient(90deg, #7b2cff, #168cff, #13d9ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .brand p {
+            margin: 10px 0 0;
+            color: var(--muted);
+            letter-spacing: 3px;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        /* PROMPT */
+        .prompt-box {
+            width: min(760px, 95%);
+            margin: 0 auto 55px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .prompt-inner {
+            display: flex;
+            gap: 10px;
+            padding: 8px;
+            border: 1px solid rgba(80, 130, 255, .35);
+            border-radius: 18px;
+            background: rgba(8, 15, 38, .85);
+            box-shadow:
+                0 0 40px rgba(35, 95, 255, .12),
+                inset 0 0 30px rgba(20, 50, 120, .08);
+            backdrop-filter: blur(20px);
+        }
+
+        .prompt-inner input {
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: 0;
+            outline: none;
+            color: white;
+            padding: 15px;
+            font-size: 15px;
+        }
+
+        .prompt-inner input::placeholder {
+            color: #647596;
+        }
+
+        .prompt-inner button {
+            border: 0;
+            border-radius: 13px;
+            padding: 0 25px;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            background: linear-gradient(135deg, #6026ff, #087eff);
+            box-shadow: 0 0 25px rgba(61, 90, 255, .35);
+            transition: .2s;
+        }
+
+        .prompt-inner button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 0 35px rgba(61, 130, 255, .55);
+        }
+
+        /* NETWORK */
+        .network {
+            width: min(1450px, 100%);
+            height: 720px;
+            margin: auto;
+            position: relative;
+        }
+
+        /* SVG FLOW LAYER */
+        .flow-svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .flow-line {
+            fill: none;
+            stroke: var(--line);
+            stroke-width: 2;
+        }
+
+        .flow-line.active {
+            stroke: rgba(19, 217, 255, .55);
+            animation: flowPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes flowPulse {
+            0%, 100% { stroke-opacity: 0.55; }
+            50% { stroke-opacity: 1; }
+        }
+
+        /* Moving data packet */
+        .packet {
+            fill: #fff;
+            filter:
+                drop-shadow(0 0 4px #13d9ff)
+                drop-shadow(0 0 12px #168cff)
+                drop-shadow(0 0 22px #7b2cff);
+        }
+
+        /* AGENTS */
+        .agent {
+            position: absolute;
+            width: 190px;
+            min-height: 105px;
+            padding: 18px;
+            border-radius: 20px;
+            background:
+                linear-gradient(145deg, rgba(17, 27, 58, .96), rgba(7, 13, 31, .96));
+            border: 1px solid rgba(72, 125, 255, .25);
+            box-shadow:
+                0 15px 50px rgba(0,0,0,.35),
+                inset 0 0 30px rgba(30,70,150,.05);
+            z-index: 4;
+            transition:
+                border-color .35s,
+                box-shadow .35s,
+                transform .35s;
+        }
+
+        .agent.active {
+            border-color: rgba(19, 217, 255, .85);
+            box-shadow:
+                0 0 25px rgba(19, 217, 255, .22),
+                0 0 70px rgba(91, 36, 255, .15),
+                inset 0 0 35px rgba(19, 100, 255, .08);
+            transform: translateY(-5px) scale(1.025);
+        }
+
+        .agent .icon {
+            width: 35px;
+            height: 35px;
+            display: grid;
+            place-items: center;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #6026ff, #087eff);
+            margin-bottom: 10px;
+            font-size: 17px;
+        }
+
+        .agent h3 {
+            margin: 0;
+            font-size: 15px;
+        }
+
+        .agent p {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        /* Chief */
+        .chief {
+            width: 250px;
+            left: 50%;
+            top: 20px;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
+        .chief.active {
+            transform: translateX(-50%) translateY(-5px) scale(1.025);
+        }
+
+        .chief .icon {
+            margin: 0 auto 10px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+        }
+
+        /* Department positions */
+        .engineering { left: 2%; top: 245px; }
+        .marketing { left: 21%; top: 245px; }
+        .growth { right: 21%; top: 245px; }
+        .finance { right: 2%; top: 245px; }
+        .sales { left: 12%; top: 450px; }
+        .operations { right: 12%; top: 450px; }
+
+        /* Specialist layer */
+        .specialists {
+            position: absolute;
+            left: 50%;
+            bottom: 10px;
+            transform: translateX(-50%);
+            width: 700px;
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            z-index: 4;
+        }
+
+        .specialist {
+            width: 100px;
+            height: 85px;
+            border-radius: 16px;
+            background: rgba(9, 17, 40, .9);
+            border: 1px solid rgba(82, 116, 255, .22);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 7px;
+            transition: .35s;
+        }
+
+        .specialist.active {
+            border-color: #13d9ff;
+            box-shadow: 0 0 28px rgba(19, 217, 255, .22);
+            transform: translateY(-8px);
+        }
+
+        .specialist .circle {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6026ff, #0aa9ff);
+        }
+
+        .specialist span {
+            color: #94a6c9;
+            font-size: 10px;
+        }
+
+        /* STATUS */
+        .status {
+            position: absolute;
+            left: 50%;
+            bottom: -35px;
+            transform: translateX(-50%);
+            color: #7387aa;
+            font-size: 12px;
+            letter-spacing: 1px;
+            white-space: nowrap;
+        }
+
+        .status strong {
+            color: #13d9ff;
+        }
+
+        /* TOKEN BAR */
+        .token-bar {
+            width: min(760px, 95%);
+            margin: 30px auto;
+            padding: 20px;
+            background: rgba(10, 16, 36, 0.9);
+            border: 1px solid rgba(80, 130, 255, 0.3);
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .token-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .token-label {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .token-count {
+            color: var(--cyan);
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .token-progress {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .token-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--purple), var(--blue), var(--cyan));
+            border-radius: 10px;
+            transition: width 0.5s;
+            box-shadow: 0 0 10px rgba(19, 217, 255, 0.5);
+        }
+
+        /* RESPONSIVE */
+        @media(max-width: 1000px) {
+            .network {
+                height: auto;
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                padding-top: 20px;
+            }
+
+            .flow-svg {
+                display: none;
+            }
+
+            .agent,
+            .chief,
+            .engineering,
+            .marketing,
+            .growth,
+            .finance,
+            .sales,
+            .operations {
+                position: relative;
+                left: auto;
+                right: auto;
+                top: auto;
+                bottom: auto;
+                transform: none;
+                width: 100%;
+            }
+
+            .chief {
+                grid-column: 1 / -1;
+            }
+
+            .specialists {
+                position: relative;
+                left: auto;
+                bottom: auto;
+                transform: none;
+                width: 100%;
+                grid-column: 1 / -1;
+                flex-wrap: wrap;
+            }
+
+            .status {
+                display: none;
+            }
+        }
+
+        @media(max-width: 600px) {
+            .scene {
+                padding: 35px 15px;
+            }
+
+            .network {
+                grid-template-columns: 1fr;
+            }
+
+            .chief {
+                grid-column: auto;
+            }
+
+            .specialists {
+                grid-column: auto;
+            }
+
+            .brand-logo {
+                width: 40px;
+                height: 40px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="scene">
-        <!-- HEADER WITH LOGO -->
-        <header class="header">
-            <div class="logo-container">
-                <img src="/static/logo.png" alt="Manic AI" class="logo-img">
-                <div class="brand-text">
-                    <h1><span>MANIC</span> AI</h1>
-                    <p class="tagline">Orchestrate • Collaborate • Execute • Evolve</p>
-                </div>
-            </div>
-            <nav class="nav">
-                <button class="nav-btn active" data-view="dashboard">Dashboard</button>
-                <button class="nav-btn" data-view="tasks">Tasks</button>
-                <button class="nav-btn" data-view="organizations">Organizations</button>
-                <button class="nav-btn" data-view="settings">Settings</button>
-            </nav>
-        </header>
+        <div class="brand">
+            <img src="/static/logo.png" alt="Manic AI" class="brand-logo">
+            <h1><span>MANIC</span> AI</h1>
+            <p>Agentic Intelligence • Orchestrate • Collaborate • Execute</p>
+        </div>
 
-        <!-- DASHBOARD VIEW -->
-        <div id="dashboard-view" class="view active">
-            <!-- PROMPT BOX -->
-            <div class="prompt-box">
-                <div class="prompt-inner">
-                    <input
-                        id="prompt"
-                        type="text"
-                        placeholder="Give Manic AI a task..."
-                        value="Analyze our competitors and create a growth strategy"
-                    >
-                    <select id="org-select" class="org-select">
-                        <option value="">Select Organization</option>
-                    </select>
-                    <button onclick="runTask()" class="run-btn">
-                        <span class="btn-icon">⚡</span>
-                        RUN
-                    </button>
-                </div>
-                <div class="prompt-options">
-                    <label class="option-label">
-                        <input type="checkbox" id="coding-task">
-                        <span>Coding Task</span>
-                    </label>
-                    <input type="text" id="repo-input" placeholder="owner/repo" class="repo-input" style="display:none;">
-                    <select id="priority-select" class="priority-select">
-                        <option value="0">Normal Priority</option>
-                        <option value="1">High Priority</option>
-                        <option value="2">Urgent</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- AGENT NETWORK VISUALIZATION -->
-            <div class="network">
-                <!-- Animated connection layer -->
-                <svg class="flow-svg" viewBox="0 0 1450 720" preserveAspectRatio="none">
-                    <!-- Chief to departments -->
-                    <path id="line-chief-engineering" class="flow-line" d="M725 130 C725 190 200 180 200 245"/>
-                    <path id="line-chief-marketing" class="flow-line" d="M725 130 C725 190 440 190 440 245"/>
-                    <path id="line-chief-growth" class="flow-line" d="M725 130 C725 190 1010 190 1010 245"/>
-                    <path id="line-chief-finance" class="flow-line" d="M725 130 C725 190 1250 180 1250 245"/>
-                    <path id="line-chief-sales" class="flow-line" d="M725 130 C725 200 360 350 360 450"/>
-                    <path id="line-chief-operations" class="flow-line" d="M725 130 C725 200 1090 350 1090 450"/>
-
-                    <!-- Departments to specialists -->
-                    <path class="flow-line" d="M200 350 C200 430 530 480 620 640"/>
-                    <path class="flow-line" d="M440 350 C440 440 600 500 650 640"/>
-                    <path class="flow-line" d="M1010 350 C1010 440 850 500 800 640"/>
-                    <path class="flow-line" d="M1250 350 C1250 430 920 480 840 640"/>
-                    <path class="flow-line" d="M360 550 C480 590 550 610 620 640"/>
-                    <path class="flow-line" d="M1090 550 C970 590 900 610 840 640"/>
-
-                    <!-- Return path -->
-                    <path class="flow-line" d="M620 650 C650 690 800 690 840 650"/>
-
-                    <!-- Moving packet -->
-                    <circle id="packet" class="packet" r="5"></circle>
-                </svg>
-
-                <!-- CHIEF AGENT -->
-                <div class="agent chief" id="chief">
-                    <div class="icon">✦</div>
-                    <h3>CHIEF AGENT</h3>
-                    <p>Plans • Delegates • Monitors<br>Final Decision Intelligence</p>
-                    <div class="agent-status" id="chief-status"></div>
-                </div>
-
-                <!-- DEPARTMENTS -->
-                <div class="agent engineering" id="engineering">
-                    <div class="icon">⌘</div>
-                    <h3>Engineering</h3>
-                    <p>Code • Architecture • Testing</p>
-                    <div class="agent-status" id="engineering-status"></div>
-                </div>
-
-                <div class="agent marketing" id="marketing">
-                    <div class="icon">✦</div>
-                    <h3>Marketing</h3>
-                    <p>Content • SEO • Campaigns</p>
-                    <div class="agent-status" id="marketing-status"></div>
-                </div>
-
-                <div class="agent growth" id="growth">
-                    <div class="icon">↗</div>
-                    <h3>Growth</h3>
-                    <p>Research • Strategy • Business</p>
-                    <div class="agent-status" id="growth-status"></div>
-                </div>
-
-                <div class="agent finance" id="finance">
-                    <div class="icon">₹</div>
-                    <h3>Finance</h3>
-                    <p>Analysis • Forecast • Optimization</p>
-                    <div class="agent-status" id="finance-status"></div>
-                </div>
-
-                <div class="agent sales" id="sales">
-                    <div class="icon">◎</div>
-                    <h3>Sales</h3>
-                    <p>Leads • Outreach • Conversion</p>
-                    <div class="agent-status" id="sales-status"></div>
-                </div>
-
-                <div class="agent operations" id="operations">
-                    <div class="icon">⚙</div>
-                    <h3>Operations</h3>
-                    <p>Processes • Automation • Delivery</p>
-                    <div class="agent-status" id="operations-status"></div>
-                </div>
-
-                <!-- SPECIALIST WORKFORCE -->
-                <div class="specialists">
-                    <div class="specialist" id="spec1">
-                        <div class="circle"></div>
-                        <span>Research</span>
-                    </div>
-                    <div class="specialist" id="spec2">
-                        <div class="circle"></div>
-                        <span>Analyst</span>
-                    </div>
-                    <div class="specialist" id="spec3">
-                        <div class="circle"></div>
-                        <span>Developer</span>
-                    </div>
-                    <div class="specialist" id="spec4">
-                        <div class="circle"></div>
-                        <span>Content</span>
-                    </div>
-                    <div class="specialist" id="spec5">
-                        <div class="circle"></div>
-                        <span>QA</span>
-                    </div>
-                    <div class="specialist" id="spec6">
-                        <div class="circle"></div>
-                        <span>Strategy</span>
-                    </div>
-                </div>
-
-                <!-- STATUS BAR -->
-                <div class="status" id="status">
-                    SYSTEM READY • <strong>WAITING FOR TASK</strong>
-                </div>
-            </div>
-
-            <!-- TOKEN USAGE BAR -->
-            <div class="token-bar" id="token-bar" style="display:none;">
-                <div class="token-info">
-                    <span class="token-label">Token Usage:</span>
-                    <span class="token-count" id="token-count">0 / 15,000</span>
-                </div>
-                <div class="token-progress">
-                    <div class="token-fill" id="token-fill"></div>
-                </div>
-            </div>
-
-            <!-- TASK RESULT -->
-            <div class="task-result" id="task-result" style="display:none;">
-                <div class="result-header">
-                    <h3>Task Result</h3>
-                    <button class="close-btn" onclick="closeResult()">×</button>
-                </div>
-                <div class="result-content" id="result-content"></div>
-                <div class="result-actions">
-                    <button class="action-btn" onclick="downloadReport()">Download Report</button>
-                    <button class="action-btn" onclick="viewDetails()">View Details</button>
-                </div>
+        <div class="prompt-box">
+            <div class="prompt-inner">
+                <input
+                    id="prompt"
+                    type="text"
+                    placeholder="Give Manic AI a task..."
+                    value="Analyze our competitors and create a growth strategy"
+                >
+                <button onclick="runTask()">RUN</button>
             </div>
         </div>
 
-        <!-- TASKS VIEW -->
-        <div id="tasks-view" class="view">
-            <div class="view-header">
-                <h2>Task History</h2>
-                <button class="refresh-btn" onclick="loadTasks()">Refresh</button>
+        <div class="network">
+            <!-- Animated connection layer -->
+            <svg class="flow-svg" viewBox="0 0 1450 720" preserveAspectRatio="none">
+                <!-- Chief to departments -->
+                <path id="line-chief-engineering" class="flow-line" d="M725 130 C725 190 200 180 200 245"/>
+                <path id="line-chief-marketing" class="flow-line" d="M725 130 C725 190 440 190 440 245"/>
+                <path id="line-chief-growth" class="flow-line" d="M725 130 C725 190 1010 190 1010 245"/>
+                <path id="line-chief-finance" class="flow-line" d="M725 130 C725 190 1250 180 1250 245"/>
+
+                <!-- Departments to specialists -->
+                <path class="flow-line" d="M200 350 C200 430 530 480 620 640"/>
+                <path class="flow-line" d="M440 350 C440 440 600 500 650 640"/>
+                <path class="flow-line" d="M1010 350 C1010 440 850 500 800 640"/>
+                <path class="flow-line" d="M1250 350 C1250 430 920 480 840 640"/>
+
+                <path class="flow-line" d="M360 550 C480 590 550 610 620 640"/>
+                <path class="flow-line" d="M1090 550 C970 590 900 610 840 640"/>
+
+                <!-- Return path -->
+                <path class="flow-line" d="M620 650 C650 690 800 690 840 650"/>
+
+                <!-- Moving packet -->
+                <circle id="packet" class="packet" r="5"></circle>
+            </svg>
+
+            <!-- CHIEF -->
+            <div class="agent chief" id="chief">
+                <div class="icon">✦</div>
+                <h3>CHIEF AGENT</h3>
+                <p>Plans • Delegates • Monitors<br>Final Decision Intelligence</p>
             </div>
-            <div class="task-list" id="task-list">
-                <div class="empty-state">
-                    <div class="empty-icon">◇</div>
-                    <p>No tasks yet</p>
+
+            <!-- DEPARTMENTS -->
+            <div class="agent engineering" id="engineering">
+                <div class="icon">⌘</div>
+                <h3>Engineering</h3>
+                <p>Code • Architecture • Testing</p>
+            </div>
+
+            <div class="agent marketing" id="marketing">
+                <div class="icon">✦</div>
+                <h3>Marketing</h3>
+                <p>Content • SEO • Campaigns</p>
+            </div>
+
+            <div class="agent growth" id="growth">
+                <div class="icon">↗</div>
+                <h3>Growth</h3>
+                <p>Research • Strategy • Business</p>
+            </div>
+
+            <div class="agent finance" id="finance">
+                <div class="icon">₹</div>
+                <h3>Finance</h3>
+                <p>Analysis • Forecast • Optimization</p>
+            </div>
+
+            <div class="agent sales" id="sales">
+                <div class="icon">◎</div>
+                <h3>Sales</h3>
+                <p>Leads • Outreach • Conversion</p>
+            </div>
+
+            <div class="agent operations" id="operations">
+                <div class="icon">⚙</div>
+                <h3>Operations</h3>
+                <p>Processes • Automation • Delivery</p>
+            </div>
+
+            <!-- SPECIALIST WORKFORCE -->
+            <div class="specialists">
+                <div class="specialist" id="spec1">
+                    <div class="circle"></div>
+                    <span>Research</span>
                 </div>
+                <div class="specialist" id="spec2">
+                    <div class="circle"></div>
+                    <span>Analyst</span>
+                </div>
+                <div class="specialist" id="spec3">
+                    <div class="circle"></div>
+                    <span>Developer</span>
+                </div>
+                <div class="specialist" id="spec4">
+                    <div class="circle"></div>
+                    <span>Content</span>
+                </div>
+                <div class="specialist" id="spec5">
+                    <div class="circle"></div>
+                    <span>QA</span>
+                </div>
+                <div class="specialist" id="spec6">
+                    <div class="circle"></div>
+                    <span>Strategy</span>
+                </div>
+            </div>
+
+            <div class="status" id="status">
+                SYSTEM READY • <strong>WAITING FOR TASK</strong>
             </div>
         </div>
 
-        <!-- ORGANIZATIONS VIEW -->
-        <div id="organizations-view" class="view">
-            <div class="view-header">
-                <h2>Organizations</h2>
-                <button class="create-btn" onclick="showCreateOrgModal()">+ Create Organization</button>
+        <!-- TOKEN USAGE BAR -->
+        <div class="token-bar" id="token-bar" style="display:none;">
+            <div class="token-info">
+                <span class="token-label">Token Usage:</span>
+                <span class="token-count" id="token-count">0 / 15,000</span>
             </div>
-            <div class="org-list" id="org-list">
-                <div class="empty-state">
-                    <div class="empty-icon">◇</div>
-                    <p>No organizations yet</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- SETTINGS VIEW -->
-        <div id="settings-view" class="view">
-            <div class="view-header">
-                <h2>Settings</h2>
-            </div>
-            <div class="settings-content">
-                <div class="setting-group">
-                    <h3>API Configuration</h3>
-                    <label>API Base URL</label>
-                    <input type="text" id="api-url" value="" placeholder="https://your-domain.com">
-                </div>
-                <div class="setting-group">
-                    <h3>Token Budget</h3>
-                    <label>Default tokens per task</label>
-                    <input type="number" id="default-budget" value="15000">
-                </div>
-                <div class="setting-group">
-                    <h3>Notifications</h3>
-                    <label class="toggle-label">
-                        <input type="checkbox" id="notify-complete" checked>
-                        <span>Notify on task completion</span>
-                    </label>
-                </div>
+            <div class="token-progress">
+                <div class="token-fill" id="token-fill"></div>
             </div>
         </div>
     </div>
 
-    <!-- CREATE ORGANIZATION MODAL -->
-    <div class="modal" id="create-org-modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create Organization</h3>
-                <button class="close-btn" onclick="closeCreateOrgModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <label>Organization Name</label>
-                <input type="text" id="org-name" placeholder="My Business">
-            </div>
-            <div class="modal-footer">
-                <button class="btn-secondary" onclick="closeCreateOrgModal()">Cancel</button>
-                <button class="btn-primary" onclick="createOrganization()">Create</button>
-            </div>
-        </div>
-    </div>
+    <script>
+        const departments = ["engineering", "marketing", "growth", "finance", "sales", "operations"];
+        const specialists = ["spec1", "spec2", "spec3", "spec4", "spec5", "spec6"];
+        const status = document.getElementById("status");
+        const chief = document.getElementById("chief");
 
-    <!-- NOTIFICATION TOAST -->
-    <div class="toast-container" id="toast-container"></div>
+        function clearAgents() {
+            document.querySelectorAll(".agent, .specialist").forEach(el => el.classList.remove("active"));
+        }
 
-    <script src="/static/app.js"></script>
+        function activate(id) {
+            const element = document.getElementById(id);
+            if(element) {
+                element.classList.add("active");
+            }
+        }
+
+        async function runTask() {
+            clearAgents();
+            const prompt = document.getElementById("prompt").value.trim() || "New task";
+            status.innerHTML = `TASK RECEIVED • <strong>${escapeHTML(prompt)}</strong>`;
+            activate("chief");
+            await wait(900);
+            status.innerHTML = `CHIEF AGENT • <strong>UNDERSTANDING REQUEST</strong>`;
+            await wait(1100);
+            status.innerHTML = `CHIEF AGENT • <strong>PLANNING EXECUTION</strong>`;
+            await wait(1000);
+            status.innerHTML = `CHIEF AGENT • <strong>DELEGATING WORK</strong>`;
+
+            for(const department of departments) {
+                activate(department);
+                await wait(300);
+            }
+
+            await wait(700);
+            status.innerHTML = `SPECIALIST WORKFORCE • <strong>EXECUTING IN PARALLEL</strong>`;
+
+            for(let i = 0; i < specialists.length; i++) {
+                activate(specialists[i]);
+                await wait(220);
+            }
+
+            await wait(1200);
+            status.innerHTML = `QUALITY ASSURANCE • <strong>REVIEWING OUTPUT</strong>`;
+            activate("spec5");
+            await wait(1000);
+            status.innerHTML = `CHIEF AGENT • <strong>COMPILING FINAL RESULT</strong>`;
+            clearAgents();
+            activate("chief");
+            await wait(1200);
+            status.innerHTML = `TASK COMPLETE • <strong>RESULT DELIVERED</strong>`;
+        }
+
+        // Ambient activity
+        setInterval(() => {
+            const randomDepartment = departments[Math.floor(Math.random() * departments.length)];
+            const randomSpecialist = specialists[Math.floor(Math.random() * specialists.length)];
+            activate(randomDepartment);
+            activate(randomSpecialist);
+            setTimeout(() => {
+                document.getElementById(randomDepartment)?.classList.remove("active");
+                document.getElementById(randomSpecialist)?.classList.remove("active");
+            }, 900);
+        }, 2200);
+
+        // Keyboard shortcut
+        document.getElementById("prompt").addEventListener("keydown", e => {
+            if(e.key === "Enter") {
+                runTask();
+            }
+        });
+
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function escapeHTML(value) {
+            return value
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+        // Initial state
+        activate("chief");
+    </script>
 </body>
 </html>
