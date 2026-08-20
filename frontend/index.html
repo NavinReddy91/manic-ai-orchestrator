@@ -3,147 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manic AI — Multi-Agent Orchestrator</title>
+    <title>Manic AI — Agentic Orchestration Platform</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="scanline"></div>
-    
-    <header class="command-center">
-        <div class="logo">
-            <div class="logo-icon">
-                <div class="pulse-ring"></div>
-                <div class="core"></div>
+    <div class="scene">
+        <!-- HEADER WITH LOGO -->
+        <header class="header">
+            <div class="logo-container">
+                <img src="/static/logo.png" alt="Manic AI" class="logo-img">
+                <div class="brand-text">
+                    <h1><span>MANIC</span> AI</h1>
+                    <p class="tagline">Orchestrate • Collaborate • Execute • Evolve</p>
+                </div>
             </div>
-            <h1>MANIC AI</h1>
-            <span class="version">v1.0</span>
+            <nav class="nav">
+                <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+                <button class="nav-btn" data-view="tasks">Tasks</button>
+                <button class="nav-btn" data-view="organizations">Organizations</button>
+                <button class="nav-btn" data-view="settings">Settings</button>
+            </nav>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="dashboard-view" class="view active">
+            <!-- PROMPT BOX -->
+            <div class="prompt-box">
+                <div class="prompt-inner">
+                    <input
+                        id="prompt"
+                        type="text"
+                        placeholder="Give Manic AI a task..."
+                        value="Analyze our competitors and create a growth strategy"
+                    >
+                    <select id="org-select" class="org-select">
+                        <option value="">Select Organization</option>
+                    </select>
+                    <button onclick="runTask()" class="run-btn">
+                        <span class="btn-icon">⚡</span>
+                        RUN
+                    </button>
+                </div>
+                <div class="prompt-options">
+                    <label class="option-label">
+                        <input type="checkbox" id="coding-task">
+                        <span>Coding Task</span>
+                    </label>
+                    <input type="text" id="repo-input" placeholder="owner/repo" class="repo-input" style="display:none;">
+                    <select id="priority-select" class="priority-select">
+                        <option value="0">Normal Priority</option>
+                        <option value="1">High Priority</option>
+                        <option value="2">Urgent</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- AGENT NETWORK VISUALIZATION -->
+            <div class="network">
+                <!-- Animated connection layer -->
+                <svg class="flow-svg" viewBox="0 0 1450 720" preserveAspectRatio="none">
+                    <!-- Chief to departments -->
+                    <path id="line-chief-engineering" class="flow-line" d="M725 130 C725 190 200 180 200 245"/>
+                    <path id="line-chief-marketing" class="flow-line" d="M725 130 C725 190 440 190 440 245"/>
+                    <path id="line-chief-growth" class="flow-line" d="M725 130 C725 190 1010 190 1010 245"/>
+                    <path id="line-chief-finance" class="flow-line" d="M725 130 C725 190 1250 180 1250 245"/>
+                    <path id="line-chief-sales" class="flow-line" d="M725 130 C725 200 360 350 360 450"/>
+                    <path id="line-chief-operations" class="flow-line" d="M725 130 C725 200 1090 350 1090 450"/>
+
+                    <!-- Departments to specialists -->
+                    <path class="flow-line" d="M200 350 C200 430 530 480 620 640"/>
+                    <path class="flow-line" d="M440 350 C440 440 600 500 650 640"/>
+                    <path class="flow-line" d="M1010 350 C1010 440 850 500 800 640"/>
+                    <path class="flow-line" d="M1250 350 C1250 430 920 480 840 640"/>
+                    <path class="flow-line" d="M360 550 C480 590 550 610 620 640"/>
+                    <path class="flow-line" d="M1090 550 C970 590 900 610 840 640"/>
+
+                    <!-- Return path -->
+                    <path class="flow-line" d="M620 650 C650 690 800 690 840 650"/>
+
+                    <!-- Moving packet -->
+                    <circle id="packet" class="packet" r="5"></circle>
+                </svg>
+
+                <!-- CHIEF AGENT -->
+                <div class="agent chief" id="chief">
+                    <div class="icon">✦</div>
+                    <h3>CHIEF AGENT</h3>
+                    <p>Plans • Delegates • Monitors<br>Final Decision Intelligence</p>
+                    <div class="agent-status" id="chief-status"></div>
+                </div>
+
+                <!-- DEPARTMENTS -->
+                <div class="agent engineering" id="engineering">
+                    <div class="icon">⌘</div>
+                    <h3>Engineering</h3>
+                    <p>Code • Architecture • Testing</p>
+                    <div class="agent-status" id="engineering-status"></div>
+                </div>
+
+                <div class="agent marketing" id="marketing">
+                    <div class="icon">✦</div>
+                    <h3>Marketing</h3>
+                    <p>Content • SEO • Campaigns</p>
+                    <div class="agent-status" id="marketing-status"></div>
+                </div>
+
+                <div class="agent growth" id="growth">
+                    <div class="icon">↗</div>
+                    <h3>Growth</h3>
+                    <p>Research • Strategy • Business</p>
+                    <div class="agent-status" id="growth-status"></div>
+                </div>
+
+                <div class="agent finance" id="finance">
+                    <div class="icon">₹</div>
+                    <h3>Finance</h3>
+                    <p>Analysis • Forecast • Optimization</p>
+                    <div class="agent-status" id="finance-status"></div>
+                </div>
+
+                <div class="agent sales" id="sales">
+                    <div class="icon">◎</div>
+                    <h3>Sales</h3>
+                    <p>Leads • Outreach • Conversion</p>
+                    <div class="agent-status" id="sales-status"></div>
+                </div>
+
+                <div class="agent operations" id="operations">
+                    <div class="icon">⚙</div>
+                    <h3>Operations</h3>
+                    <p>Processes • Automation • Delivery</p>
+                    <div class="agent-status" id="operations-status"></div>
+                </div>
+
+                <!-- SPECIALIST WORKFORCE -->
+                <div class="specialists">
+                    <div class="specialist" id="spec1">
+                        <div class="circle"></div>
+                        <span>Research</span>
+                    </div>
+                    <div class="specialist" id="spec2">
+                        <div class="circle"></div>
+                        <span>Analyst</span>
+                    </div>
+                    <div class="specialist" id="spec3">
+                        <div class="circle"></div>
+                        <span>Developer</span>
+                    </div>
+                    <div class="specialist" id="spec4">
+                        <div class="circle"></div>
+                        <span>Content</span>
+                    </div>
+                    <div class="specialist" id="spec5">
+                        <div class="circle"></div>
+                        <span>QA</span>
+                    </div>
+                    <div class="specialist" id="spec6">
+                        <div class="circle"></div>
+                        <span>Strategy</span>
+                    </div>
+                </div>
+
+                <!-- STATUS BAR -->
+                <div class="status" id="status">
+                    SYSTEM READY • <strong>WAITING FOR TASK</strong>
+                </div>
+            </div>
+
+            <!-- TOKEN USAGE BAR -->
+            <div class="token-bar" id="token-bar" style="display:none;">
+                <div class="token-info">
+                    <span class="token-label">Token Usage:</span>
+                    <span class="token-count" id="token-count">0 / 15,000</span>
+                </div>
+                <div class="token-progress">
+                    <div class="token-fill" id="token-fill"></div>
+                </div>
+            </div>
+
+            <!-- TASK RESULT -->
+            <div class="task-result" id="task-result" style="display:none;">
+                <div class="result-header">
+                    <h3>Task Result</h3>
+                    <button class="close-btn" onclick="closeResult()">×</button>
+                </div>
+                <div class="result-content" id="result-content"></div>
+                <div class="result-actions">
+                    <button class="action-btn" onclick="downloadReport()">Download Report</button>
+                    <button class="action-btn" onclick="viewDetails()">View Details</button>
+                </div>
+            </div>
         </div>
-        <nav class="status-bar">
-            <div class="status-item">
-                <span class="status-dot online"></span>
-                <span>SYSTEM ONLINE</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">AGENTS:</span>
-                <span id="agent-count">17</span>
-            </div>
-            <div class="status-item">
-                <span class="status-label">TASKS:</span>
-                <span id="task-count">0</span>
-            </div>
-        </nav>
-    </header>
 
-    <main class="dashboard">
-        <section class="agent-grid">
-            <h2 class="section-title">
-                <span class="title-icon">◈</span>
-                AGENT HIERARCHY
-                <span class="title-icon">◈</span>
-            </h2>
-            <div class="org-chart" id="org-chart">
-                <!-- Agent nodes will be rendered here -->
+        <!-- TASKS VIEW -->
+        <div id="tasks-view" class="view">
+            <div class="view-header">
+                <h2>Task History</h2>
+                <button class="refresh-btn" onclick="loadTasks()">Refresh</button>
             </div>
-        </section>
-
-        <section class="task-panel">
-            <h2 class="section-title">
-                <span class="title-icon">▶</span>
-                MISSION CONTROL
-                <span class="title-icon">▶</span>
-            </h2>
-            
-            <div class="task-input-container">
-                <div class="input-header">
-                    <label for="task-prompt">DEPLOY NEW MISSION</label>
-                    <div class="org-selector">
-                        <label>ORG BOUNDARY:</label>
-                        <select id="org-select">
-                            <option value="">Select Organization</option>
-                        </select>
-                        <button id="open-create-org-btn" class="btn-secondary" title="Create New Organization Boundary">+ Create Org</button>
-                    </div>
-                </div>
-                <textarea 
-                    id="task-prompt" 
-                    placeholder="Enter your mission briefing... (e.g., 'Research AI trends and create a strategy document')"
-                    rows="4"
-                ></textarea>
-                <div class="task-options">
-                    <div class="option-group">
-                        <label>Priority:</label>
-                        <select id="task-priority">
-                            <option value="0">Normal</option>
-                            <option value="1">High</option>
-                            <option value="2">Urgent</option>
-                        </select>
-                    </div>
-                    <div class="option-group">
-                        <label>Repo (optional):</label>
-                        <input type="text" id="task-repo" placeholder="owner/repo">
-                    </div>
-                </div>
-                <button id="deploy-task" class="deploy-btn">
-                    <span class="btn-icon">⚡</span>
-                    DEPLOY MISSION
-                </button>
-            </div>
-
-            <div class="task-list">
-                <h3>ACTIVE MISSIONS</h3>
-                <div id="task-list-container">
-                    <div class="empty-state">
-                        <div class="empty-icon">◇</div>
-                        <p>No active missions</p>
-                    </div>
+            <div class="task-list" id="task-list">
+                <div class="empty-state">
+                    <div class="empty-icon">◇</div>
+                    <p>No tasks yet</p>
                 </div>
             </div>
-        </section>
-
-        <section class="task-detail" id="task-detail" style="display: none;">
-            <h2 class="section-title">
-                <span class="title-icon">◉</span>
-                MISSION STATUS
-                <span class="title-icon">◉</span>
-            </h2>
-            <div id="task-detail-content">
-                <!-- Task details will be rendered here -->
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="footer-content">
-            <span>MANIC AI ORCHESTRATOR</span>
-            <span class="separator">|</span>
-            <span>HIERARCHICAL MULTI-AGENT SYSTEM</span>
-            <span class="separator">|</span>
-            <a href="/docs" target="_blank">API DOCS</a>
         </div>
-    </footer>
 
-    <!-- Create Organization Modal -->
-    <div id="create-org-modal" class="modal-overlay" style="display: none;">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3><span class="title-icon">❖</span> CREATE ORGANIZATION BOUNDARY</h3>
-                <button id="close-create-org-modal" class="modal-close-btn">&times;</button>
+        <!-- ORGANIZATIONS VIEW -->
+        <div id="organizations-view" class="view">
+            <div class="view-header">
+                <h2>Organizations</h2>
+                <button class="create-btn" onclick="showCreateOrgModal()">+ Create Organization</button>
             </div>
-            <div class="modal-body">
-                <p class="modal-description">Create an isolated organization workspace to manage tasks, code repositories, and agent access limits independently.</p>
-                <div class="form-group">
-                    <label for="new-org-name">ORGANIZATION NAME</label>
-                    <input type="text" id="new-org-name" placeholder="e.g. Acme Corp, CyberOps, Marketing Division" autofocus />
+            <div class="org-list" id="org-list">
+                <div class="empty-state">
+                    <div class="empty-icon">◇</div>
+                    <p>No organizations yet</p>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button id="cancel-create-org-btn" class="btn-cancel">Cancel</button>
-                <button id="confirm-create-org-btn" class="btn-primary">Create Organization</button>
+        </div>
+
+        <!-- SETTINGS VIEW -->
+        <div id="settings-view" class="view">
+            <div class="view-header">
+                <h2>Settings</h2>
+            </div>
+            <div class="settings-content">
+                <div class="setting-group">
+                    <h3>API Configuration</h3>
+                    <label>API Base URL</label>
+                    <input type="text" id="api-url" value="" placeholder="https://your-domain.com">
+                </div>
+                <div class="setting-group">
+                    <h3>Token Budget</h3>
+                    <label>Default tokens per task</label>
+                    <input type="number" id="default-budget" value="15000">
+                </div>
+                <div class="setting-group">
+                    <h3>Notifications</h3>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="notify-complete" checked>
+                        <span>Notify on task completion</span>
+                    </label>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="notification" class="notification"></div>
+    <!-- CREATE ORGANIZATION MODAL -->
+    <div class="modal" id="create-org-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create Organization</h3>
+                <button class="close-btn" onclick="closeCreateOrgModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <label>Organization Name</label>
+                <input type="text" id="org-name" placeholder="My Business">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeCreateOrgModal()">Cancel</button>
+                <button class="btn-primary" onclick="createOrganization()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICATION TOAST -->
+    <div class="toast-container" id="toast-container"></div>
 
     <script src="/static/app.js"></script>
 </body>

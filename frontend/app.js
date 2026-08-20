@@ -1,100 +1,72 @@
-// Manic AI — Frontend Application
+// Manic AI — Enhanced Frontend Application with Real API Integration
 
 const API_BASE = window.location.origin;
 let currentOrgId = null;
-let refreshInterval = null;
+let currentTaskId = null;
+let eventSource = null;
 
-// Organization chart structure
-const ORG_CHART = {
-    ceo: { label: "Chief Agent", team: "executive", reports: ["coding_head", "marketing_head", "growth_head", "accounting_head", "sales_head", "operations_head"] },
-    coding_head: { label: "Coding Manager", team: "coding", reports: ["frontend_dev", "backend_dev", "bug_checker_frontend", "bug_checker_backend", "integration_checker"] },
-    frontend_dev: { label: "Frontend Dev", team: "coding", reports: [] },
-    backend_dev: { label: "Backend Dev", team: "coding", reports: [] },
-    bug_checker_frontend: { label: "Frontend QA", team: "coding", reports: [] },
-    bug_checker_backend: { label: "Backend QA", team: "coding", reports: [] },
-    integration_checker: { label: "Integration QA", team: "coding", reports: [] },
-    marketing_head: { label: "Marketing Manager", team: "marketing", reports: ["traditional_marketing", "digital_marketing"] },
-    traditional_marketing: { label: "Traditional Marketing", team: "marketing", reports: [] },
-    digital_marketing: { label: "Digital Marketing", team: "marketing", reports: [] },
-    growth_head: { label: "Growth Manager", team: "growth", reports: ["market_researcher", "business_analyst"] },
-    market_researcher: { label: "Market Researcher", team: "growth", reports: [] },
-    business_analyst: { label: "Business Analyst", team: "growth", reports: [] },
-    accounting_head: { label: "Accounting Manager", team: "accounting", reports: ["bookkeeper"] },
-    bookkeeper: { label: "Bookkeeper", team: "accounting", reports: [] },
-    sales_head: { label: "Sales Manager", team: "sales", reports: ["sales_rep"] },
-    sales_rep: { label: "Sales Rep", team: "sales", reports: [] },
-    operations_head: { label: "Operations Manager", team: "operations", reports: ["ops_coordinator"] },
-    ops_coordinator: { label: "Ops Coordinator", team: "operations", reports: [] }
+// Agent mapping for visualization
+const AGENT_MAP = {
+    ceo: 'chief',
+    coding_head: 'engineering',
+    marketing_head: 'marketing',
+    growth_head: 'growth',
+    accounting_head: 'finance',
+    sales_head: 'sales',
+    operations_head: 'operations'
 };
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    renderOrgChart();
     loadOrganizations();
     loadTasks();
-    
-    // Auto-refresh tasks every 5 seconds
-    refreshInterval = setInterval(loadTasks, 5000);
-    
-    // Event listeners
-    document.getElementById('deploy-task').addEventListener('click', deployTask);
+    setupEventListeners();
+    activate('chief');
+});
+
+// Setup all event listeners
+function setupEventListeners() {
+    // Navigation
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const view = e.target.dataset.view;
+            switchView(view);
+        });
+    });
+
+    // Task submission
+    document.getElementById('prompt').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runTask();
+    });
+
+    // Coding task checkbox
+    document.getElementById('coding-task').addEventListener('change', (e) => {
+        const repoInput = document.getElementById('repo-input');
+        repoInput.style.display = e.target.checked ? 'block' : 'none';
+    });
+
+    // Organization select
     document.getElementById('org-select').addEventListener('change', (e) => {
         currentOrgId = e.target.value;
         loadTasks();
     });
-
-    // Organization Modal handlers
-    document.getElementById('open-create-org-btn').addEventListener('click', openCreateOrgModal);
-    document.getElementById('close-create-org-modal').addEventListener('click', closeCreateOrgModal);
-    document.getElementById('cancel-create-org-btn').addEventListener('click', closeCreateOrgModal);
-    document.getElementById('confirm-create-org-btn').addEventListener('click', createOrganization);
-    
-    // Close modal on escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeCreateOrgModal();
-    });
-});
-
-// Render organization chart
-function renderOrgChart() {
-    const container = document.getElementById('org-chart');
-    container.innerHTML = '';
-    
-    // Render CEO first
-    const ceoNode = createAgentNode('ceo', ORG_CHART.ceo);
-    ceoNode.classList.add('ceo');
-    container.appendChild(ceoNode);
-    
-    // Render department heads
-    ORG_CHART.ceo.reports.forEach(deptKey => {
-        const dept = ORG_CHART[deptKey];
-        const deptNode = createAgentNode(deptKey, dept);
-        container.appendChild(deptNode);
-    });
-    
-    // Render specialists
-    Object.keys(ORG_CHART).forEach(key => {
-        const agent = ORG_CHART[key];
-        if (agent.team !== 'executive' && !ORG_CHART.ceo.reports.includes(key)) {
-            // Skip if already rendered as department head
-            const isDeptHead = Object.values(ORG_CHART).some(a => a.reports.includes(key));
-            if (!isDeptHead) {
-                const node = createAgentNode(key, agent);
-                container.appendChild(node);
-            }
-        }
-    });
 }
 
-function createAgentNode(key, agent) {
-    const node = document.createElement('div');
-    node.className = 'agent-node';
-    node.dataset.agentKey = key;
-    node.innerHTML = `
-        <div class="agent-label">${agent.label}</div>
-        <div class="agent-team">${agent.team}</div>
-    `;
-    return node;
+// Switch between views
+function switchView(viewName) {
+    // Update nav buttons
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === viewName);
+    });
+
+    // Update views
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.toggle('active', view.id === `${viewName}-view`);
+    });
+
+    // Load data for specific views
+    if (viewName === 'tasks') loadTasks();
+    if (viewName === 'organizations') loadOrganizations();
 }
 
 // Load organizations
@@ -121,10 +93,37 @@ async function loadOrganizations() {
             select.value = orgs[0].id;
             currentOrgId = orgs[0].id;
         }
+
+        // Update organizations view
+        renderOrganizationsList(orgs);
     } catch (error) {
         console.error('Error loading organizations:', error);
-        showNotification('Failed to load organizations', 'error');
+        showToast('Failed to load organizations', 'error');
     }
+}
+
+// Render organizations list
+function renderOrganizationsList(orgs) {
+    const container = document.getElementById('org-list');
+    
+    if (orgs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">◇</div>
+                <p>No organizations yet</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = orgs.map(org => `
+        <div class="org-item">
+            <div>
+                <div class="org-name">${escapeHtml(org.name)}</div>
+                <div class="org-date">Created: ${formatDate(org.created_at)}</div>
+            </div>
+        </div>
+    `).join('');
 }
 
 // Load tasks
@@ -139,9 +138,6 @@ async function loadTasks() {
         
         const tasks = await response.json();
         renderTaskList(tasks);
-        
-        // Update task count
-        document.getElementById('task-count').textContent = tasks.length;
     } catch (error) {
         console.error('Error loading tasks:', error);
     }
@@ -149,92 +145,208 @@ async function loadTasks() {
 
 // Render task list
 function renderTaskList(tasks) {
-    const container = document.getElementById('task-list-container');
+    const container = document.getElementById('task-list');
     
     if (tasks.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon">◇</div>
-                <p>No active missions for this organization</p>
+                <p>No tasks yet</p>
             </div>
         `;
         return;
     }
     
-    container.innerHTML = tasks.map(task => {
-        const isRunning = task.status === 'running' || task.status === 'planning';
-        return `
-            <div class="task-item ${isRunning ? 'task-running-pulse' : ''}" onclick="showTaskDetail('${task.id}')">
-                <div class="task-item-header">
-                    <span class="task-id">${task.id.substring(0, 8)}...</span>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <span class="task-status ${task.status}">${task.status}</span>
-                        ${isRunning ? `<button class="btn-danger-sm" onclick="event.stopPropagation(); cancelTask('${task.id}')" title="Stop running mission">⏹ Stop</button>` : ''}
-                    </div>
-                </div>
-                <div class="task-prompt">${escapeHtml(task.prompt.substring(0, 150))}${task.prompt.length > 150 ? '...' : ''}</div>
-                <div class="task-meta">
-                    <span>LLM Calls: ${task.llm_call_count}</span>
-                    <span>Tokens: ~${task.estimated_tokens}</span>
-                    <span>Created: ${formatDate(task.created_at)}</span>
-                </div>
+    container.innerHTML = tasks.map(task => `
+        <div class="task-item" onclick="showTaskDetail('${task.id}')">
+            <div class="task-item-header">
+                <span class="task-id">${task.id.substring(0, 8)}...</span>
+                <span class="task-status ${task.status}">${task.status}</span>
             </div>
-        `;
-    }).join('');
+            <div class="task-prompt">${escapeHtml(task.prompt.substring(0, 150))}${task.prompt.length > 150 ? '...' : ''}</div>
+            <div class="task-meta">
+                <span>Tokens: ${task.tokens_used || 0} / ${task.token_budget || 15000}</span>
+                <span>LLM Calls: ${task.llm_call_count || 0}</span>
+                <span>Created: ${formatDate(task.created_at)}</span>
+            </div>
+        </div>
+    `).join('');
 }
 
-// Deploy new task
-async function deployTask() {
-    const prompt = document.getElementById('task-prompt').value.trim();
-    const repo = document.getElementById('task-repo').value.trim();
-    const priority = parseInt(document.getElementById('task-priority').value);
+// Run task with real API integration
+async function runTask() {
+    const prompt = document.getElementById('prompt').value.trim();
+    const repo = document.getElementById('repo-input').value.trim();
+    const priority = parseInt(document.getElementById('priority-select').value);
+    const isCoding = document.getElementById('coding-task').checked;
     
     if (!prompt) {
-        showNotification('Please enter a mission briefing', 'error');
+        showToast('Please enter a task', 'error');
         return;
     }
     
     if (!currentOrgId) {
-        showNotification('Please select an organization', 'error');
+        showToast('Please select an organization', 'error');
         return;
     }
     
     try {
         const response = await fetch(`${API_BASE}/tasks`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 organization_id: currentOrgId,
                 prompt: prompt,
-                repo: repo || null,
-                priority: priority
+                repo: isCoding && repo ? repo : null,
+                priority: priority,
+                token_budget: 15000
             })
         });
         
         if (!response.ok) {
             const error = await response.json();
-            throw new Error(error.detail || 'Failed to deploy task');
+            throw new Error(error.detail || 'Failed to create task');
         }
         
         const task = await response.json();
-        showNotification(`Mission deployed: ${task.id.substring(0, 8)}...`, 'success');
+        currentTaskId = task.id;
+        
+        showToast(`Task created: ${task.id.substring(0, 8)}...`, 'success');
+        
+        // Start real-time monitoring
+        startTaskMonitoring(task.id);
         
         // Clear form
-        document.getElementById('task-prompt').value = '';
-        document.getElementById('task-repo').value = '';
-        document.getElementById('task-priority').value = '0';
+        document.getElementById('prompt').value = '';
+        document.getElementById('repo-input').value = '';
         
-        // Reload tasks
-        loadTasks();
-        
-        // Show task detail
-        showTaskDetail(task.id);
     } catch (error) {
-        console.error('Error deploying task:', error);
-        showNotification(error.message, 'error');
+        console.error('Error creating task:', error);
+        showToast(error.message, 'error');
     }
+}
+
+// Start real-time task monitoring via SSE
+function startTaskMonitoring(taskId) {
+    // Close existing connection
+    if (eventSource) {
+        eventSource.close();
+    }
+    
+    // Show token bar
+    document.getElementById('token-bar').style.display = 'block';
+    
+    // Start SSE connection
+    eventSource = new EventSource(`${API_BASE}/tasks/${taskId}/stream`);
+    
+    eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        updateTaskProgress(data);
+        
+        if (data.completed) {
+            eventSource.close();
+            showTaskResult(data);
+        }
+    };
+    
+    eventSource.onerror = (error) => {
+        console.error('SSE error:', error);
+        showToast('Connection lost. Refreshing...', 'error');
+        eventSource.close();
+        setTimeout(() => loadTasks(), 2000);
+    };
+}
+
+// Update task progress in real-time
+function updateTaskProgress(data) {
+    // Update token bar
+    const tokenCount = document.getElementById('token-count');
+    const tokenFill = document.getElementById('token-fill');
+    
+    tokenCount.textContent = `${data.tokens_used || 0} / ${data.token_budget || 15000}`;
+    const percentage = ((data.tokens_used || 0) / (data.token_budget || 15000)) * 100;
+    tokenFill.style.width = `${Math.min(percentage, 100)}%`;
+    
+    // Update agent statuses
+    if (data.agents) {
+        data.agents.forEach(agent => {
+            const agentId = AGENT_MAP[agent.key] || agent.key;
+            const element = document.getElementById(agentId);
+            const statusElement = document.getElementById(`${agentId}-status`);
+            
+            if (element) {
+                if (agent.status === 'running') {
+                    element.classList.add('active');
+                    if (statusElement) {
+                        statusElement.textContent = agent.status.toUpperCase();
+                    }
+                } else if (agent.status === 'done') {
+                    element.classList.remove('active');
+                    if (statusElement) {
+                        statusElement.textContent = '✓ DONE';
+                        statusElement.style.color = 'var(--success)';
+                    }
+                } else if (agent.status === 'failed') {
+                    element.classList.remove('active');
+                    if (statusElement) {
+                        statusElement.textContent = '✗ FAILED';
+                        statusElement.style.color = 'var(--error)';
+                    }
+                }
+            }
+        });
+    }
+    
+    // Update status text
+    const status = document.getElementById('status');
+    status.innerHTML = `TASK RUNNING • <strong>TOKENS: ${data.tokens_used || 0}</strong>`;
+}
+
+// Show task result
+function showTaskResult(data) {
+    const resultDiv = document.getElementById('task-result');
+    const resultContent = document.getElementById('result-content');
+    
+    resultDiv.style.display = 'block';
+    
+    let html = '<div class="result-summary">';
+    
+    if (data.final_report) {
+        try {
+            const report = typeof data.final_report === 'string' 
+                ? JSON.parse(data.final_report) 
+                : data.final_report;
+            
+            html += `<h4>Summary</h4>`;
+            html += `<p>${escapeHtml(report.summary || 'Task completed')}</p>`;
+            
+            if (report.pr_url) {
+                html += `<p><strong>Pull Request:</strong> <a href="${report.pr_url}" target="_blank">${report.pr_url}</a></p>`;
+            }
+            
+            if (report.files_changed && report.files_changed.length > 0) {
+                html += `<p><strong>Files Changed:</strong> ${report.files_changed.join(', ')}</p>`;
+            }
+            
+            if (report.reports && report.reports.length > 0) {
+                html += `<h4>Generated Reports</h4><ul>`;
+                report.reports.forEach(r => {
+                    html += `<li>${escapeHtml(r.department)}: <a href="${r.report_path}" download>Download ${r.format.toUpperCase()}</a></li>`;
+                });
+                html += `</ul>`;
+            }
+        } catch (e) {
+            html += `<pre>${escapeHtml(data.final_report)}</pre>`;
+        }
+    }
+    
+    html += '</div>';
+    resultContent.innerHTML = html;
+    
+    // Update status
+    document.getElementById('status').innerHTML = `TASK COMPLETE • <strong>RESULT DELIVERED</strong>`;
+    
+    showToast('Task completed successfully!', 'success');
 }
 
 // Show task detail
@@ -244,127 +356,49 @@ async function showTaskDetail(taskId) {
         if (!response.ok) throw new Error('Failed to load task');
         
         const task = await response.json();
-        renderTaskDetail(task);
+        currentTaskId = taskId;
         
-        document.getElementById('task-detail').style.display = 'block';
-        document.getElementById('task-detail').scrollIntoView({ behavior: 'smooth' });
-    } catch (error) {
-        console.error('Error loading task detail:', error);
-        showNotification('Failed to load task details', 'error');
-    }
-}
-
-// Render task detail
-function renderTaskDetail(task) {
-    const container = document.getElementById('task-detail-content');
-    const isRunning = task.status === 'running' || task.status === 'planning';
-    
-    let html = `
-        <div class="detail-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h4>Mission Info</h4>
-                ${isRunning ? `
-                    <button class="btn-danger abort-btn" onclick="cancelTask('${task.id}')">
-                        <span class="btn-icon">⏹</span> ABORT MISSION (STOP RUNNING)
-                    </button>
-                ` : ''}
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">Task ID:</span>
-                <span class="detail-value">${task.id}</span>
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value"><span class="task-status ${task.status}">${task.status}</span></span>
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">Priority:</span>
-                <span class="detail-value">${['Normal', 'High', 'Urgent'][task.priority]}</span>
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">Created:</span>
-                <span class="detail-value">${formatDate(task.created_at)}</span>
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">LLM Calls:</span>
-                <span class="detail-value">${task.llm_call_count}</span>
-            </div>
-            <div class="detail-field">
-                <span class="detail-label">Est. Tokens:</span>
-                <span class="detail-value">~${task.estimated_tokens}</span>
-            </div>
-        </div>
-        
-        <div class="detail-section">
-            <h4>Mission Briefing</h4>
-            <div class="detail-value" style="white-space: pre-wrap; background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 4px;">
-                ${escapeHtml(task.prompt)}
-            </div>
-        </div>
-    `;
-    
-    // Add agent tree
-    if (task.org_tree) {
-        html += `
-            <div class="detail-section">
-                <h4>Agent Execution Tree</h4>
-                <div class="agent-tree">
-                    ${renderAgentTree(task.org_tree, true)}
-                </div>
-            </div>
-        `;
-    }
-    
-    // Add final report or execution error report
-    if (task.final_report) {
-        const isFailed = task.status === 'failed';
-        const isCancelled = task.status === 'cancelled';
-        const titleText = isFailed ? '⚠ Execution Failure Log' : (isCancelled ? '⏹ Mission Aborted Log' : 'Final Report');
-        const borderColor = isFailed ? '#ff3366' : (isCancelled ? '#ffaa00' : '#00f0ff');
-        const bgColor = isFailed ? 'rgba(255, 51, 102, 0.1)' : (isCancelled ? 'rgba(255, 170, 0, 0.1)' : 'rgba(0, 240, 255, 0.05)');
-        
-        html += `
-            <div class="detail-section">
-                <div class="final-report">
-                    <h4 style="color: ${borderColor};">${titleText}</h4>
-                    <div class="final-report-content" style="border-color: ${borderColor}; background: ${bgColor}; color: ${isFailed ? '#ff99aa' : (isCancelled ? '#ffddaa' : '#e0f7ff')};">${escapeHtml(task.final_report)}</div>
-                </div>
-            </div>
-        `;
-    }
-    
-    container.innerHTML = html;
-}
-
-// Cancel / Abort task execution
-async function cancelTask(taskId) {
-    if (!confirm('Are you sure you want to stop and abort this mission?')) return;
-    
-    try {
-        const response = await fetch(`${API_BASE}/tasks/${taskId}`, {
-            method: 'DELETE'
-        });
-        
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || 'Failed to stop task');
+        // If task is running, start monitoring
+        if (task.status === 'running' || task.status === 'planning') {
+            startTaskMonitoring(taskId);
+        } else {
+            // Show result for completed tasks
+            showTaskResult(task);
         }
-        
-        showNotification('Mission execution stopped', 'warning');
-        loadTasks();
-        showTaskDetail(taskId);
     } catch (error) {
-        console.error('Error stopping task:', error);
-        showNotification(error.message, 'error');
+        console.error('Error loading task:', error);
+        showToast('Failed to load task details', 'error');
     }
 }
 
-// Create new organization boundary
+// Close result
+function closeResult() {
+    document.getElementById('task-result').style.display = 'none';
+    document.getElementById('token-bar').style.display = 'none';
+    clearAgents();
+}
+
+// Download report
+function downloadReport() {
+    if (!currentTaskId) return;
+    
+    // This would need a backend endpoint to generate downloadable reports
+    showToast('Report download feature coming soon', 'info');
+}
+
+// View details
+function viewDetails() {
+    if (!currentTaskId) return;
+    switchView('tasks');
+    // Scroll to task or open detail
+}
+
+// Create organization
 async function createOrganization() {
-    const input = document.getElementById('new-org-name');
-    const name = input.value.trim();
+    const name = document.getElementById('org-name').value.trim();
+    
     if (!name) {
-        showNotification('Please enter an organization name', 'error');
+        showToast('Please enter organization name', 'error');
         return;
     }
     
@@ -372,116 +406,106 @@ async function createOrganization() {
         const response = await fetch(`${API_BASE}/organizations`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: name })
+            body: JSON.stringify({ name })
         });
         
         if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.detail || 'Failed to create organization');
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create organization');
         }
         
-        const newOrg = await response.json();
-        showNotification(`Organization boundary '${newOrg.name}' created!`, 'success');
-        input.value = '';
-        closeCreateOrgModal();
+        const org = await response.json();
+        showToast(`Organization created: ${org.name}`, 'success');
         
-        // Reload organizations & set active org boundary
-        await loadOrganizations();
-        const select = document.getElementById('org-select');
-        select.value = newOrg.id;
-        currentOrgId = newOrg.id;
-        loadTasks();
+        // Close modal and reload
+        closeCreateOrgModal();
+        loadOrganizations();
+        
     } catch (error) {
         console.error('Error creating organization:', error);
-        showNotification(error.message, 'error');
+        showToast(error.message, 'error');
     }
 }
 
-function openCreateOrgModal() {
-    document.getElementById('create-org-modal').style.display = 'flex';
-    document.getElementById('new-org-name').focus();
+// Modal functions
+function showCreateOrgModal() {
+    document.getElementById('create-org-modal').classList.add('active');
 }
 
 function closeCreateOrgModal() {
-    document.getElementById('create-org-modal').style.display = 'none';
+    document.getElementById('create-org-modal').classList.remove('active');
+    document.getElementById('org-name').value = '';
 }
 
-// Render agent tree recursively
-function renderAgentTree(node, isRoot = false) {
-    const statusClass = node.status;
-    let html = `
-        <div class="tree-node ${isRoot ? 'tree-node-root' : ''}">
-            <div class="tree-node-header">
-                <span class="tree-node-label">${node.label}</span>
-                <span class="tree-node-status task-status ${statusClass}">${node.status}</span>
-            </div>
-    `;
-    
-    if (node.result && node.status === 'done') {
-        try {
-            const result = JSON.parse(node.result);
-            const summary = result.summary || node.result;
-            html += `<div class="tree-node-result">${escapeHtml(summary)}</div>`;
-        } catch {
-            html += `<div class="tree-node-result">${escapeHtml(node.result)}</div>`;
+// Agent visualization functions
+function clearAgents() {
+    document.querySelectorAll('.agent, .specialist').forEach(el => {
+        el.classList.remove('active');
+        const status = el.querySelector('.agent-status');
+        if (status) {
+            status.textContent = '';
+            status.style.color = '';
         }
+    });
+}
+
+function activate(id) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.classList.add('active');
     }
+}
+
+// Toast notifications
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<div class="toast-message">${escapeHtml(message)}</div>`;
     
-    if (node.children && node.children.length > 0) {
-        node.children.forEach(child => {
-            html += renderAgentTree(child, false);
-        });
-    }
-    
-    html += '</div>';
-    return html;
-}
-
-// Utility functions
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString();
-}
-
-function showNotification(message, type = 'info') {
-    const notification = document.getElementById('notification');
-    notification.textContent = message;
-    notification.className = `notification show ${type}`;
+    container.appendChild(toast);
     
     setTimeout(() => {
-        notification.classList.remove('show');
+        toast.style.animation = 'slideIn 0.3s reverse';
+        setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// Create default organization if none exists
-async function ensureOrganization() {
-    try {
-        const response = await fetch(`${API_BASE}/organizations`);
-        const orgs = await response.json();
-        
-        if (orgs.length === 0) {
-            // Create default organization
-            const createResponse = await fetch(`${API_BASE}/organizations`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: 'Default Organization' })
-            });
-            
-            if (createResponse.ok) {
-                await loadOrganizations();
-            }
-        }
-    } catch (error) {
-        console.error('Error ensuring organization:', error);
-    }
+// Utility functions
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
 }
 
-// Check if we need to create an organization
-setTimeout(ensureOrganization, 1000);
+function escapeHTML(value) {
+    if (!value) return '';
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+// Ambient activity animation
+setInterval(() => {
+    const departments = ['engineering', 'marketing', 'growth', 'finance', 'sales', 'operations'];
+    const specialists = ['spec1', 'spec2', 'spec3', 'spec4', 'spec5', 'spec6'];
+    
+    const randomDept = departments[Math.floor(Math.random() * departments.length)];
+    const randomSpec = specialists[Math.floor(Math.random() * specialists.length)];
+    
+    activate(randomDept);
+    activate(randomSpec);
+    
+    setTimeout(() => {
+        document.getElementById(randomDept)?.classList.remove('active');
+        document.getElementById(randomSpec)?.classList.remove('active');
+    }, 900);
+}, 2200);
